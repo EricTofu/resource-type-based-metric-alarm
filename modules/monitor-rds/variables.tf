@@ -1,0 +1,56 @@
+variable "project" {
+  description = "Project name for alarm naming"
+  type        = string
+}
+
+variable "resources" {
+  description = "List of RDS/Aurora resources to monitor"
+  type = list(object({
+    name = string
+    overrides = optional(object({
+      severity                       = optional(string)
+      description                    = optional(string)
+      freeable_memory_threshold      = optional(number)
+      cpu_threshold                  = optional(number)
+      database_connections_threshold = optional(number)
+      free_storage_threshold         = optional(number)
+    }), {})
+  }))
+}
+
+variable "sns_topic_arns" {
+  description = "SNS topic ARNs mapped by severity"
+  type = object({
+    WARN  = string
+    ERROR = string
+    CRIT  = string
+  })
+}
+
+#------------------------------------------------------------------------------
+# Default Thresholds
+#------------------------------------------------------------------------------
+
+variable "default_freeable_memory_threshold" {
+  description = "Default threshold for FreeableMemory (bytes)"
+  type        = number
+  default     = 1073741824 # 1GB
+}
+
+variable "default_cpu_threshold" {
+  description = "Default threshold for CPUUtilization"
+  type        = number
+  default     = 90
+}
+
+variable "default_database_connections_threshold" {
+  description = "Default threshold for DatabaseConnections"
+  type        = number
+  default     = 2700
+}
+
+variable "default_free_storage_threshold" {
+  description = "Default threshold for FreeStorageSpace (bytes)"
+  type        = number
+  default     = 10737418240 # 10GB
+}

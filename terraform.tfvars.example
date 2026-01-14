@@ -1,0 +1,203 @@
+#------------------------------------------------------------------------------
+# Example Terraform Configuration
+# Copy this file to terraform.tfvars and customize for your environment
+#------------------------------------------------------------------------------
+
+aws_region = "ap-northeast-1"
+
+# SNS Topic ARNs for each severity level
+sns_topic_arns = {
+  WARN  = "arn:aws:sns:ap-northeast-1:123456789012:warning-alerts"
+  ERROR = "arn:aws:sns:ap-northeast-1:123456789012:error-alerts"
+  CRIT  = "arn:aws:sns:ap-northeast-1:123456789012:critical-alerts"
+}
+
+#------------------------------------------------------------------------------
+# ALB Resources
+#------------------------------------------------------------------------------
+
+alb_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "app-alb" },
+      { name = "api-alb", overrides = { target_response_time_threshold = 10 } }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# API Gateway Resources
+#------------------------------------------------------------------------------
+
+apigateway_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "public-api" }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# EC2 Resources
+#------------------------------------------------------------------------------
+
+ec2_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "web-server-1" },
+      { name = "web-server-2", overrides = { cpu_threshold = 90 } }
+    ]
+  },
+  {
+    project = "project2"
+    resources = [
+      { name = "api-server-1", overrides = { severity = "CRIT" } }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# ASG Resources
+#------------------------------------------------------------------------------
+
+asg_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "web-asg", desired_capacity = 3 },
+      { name = "api-asg", desired_capacity = 2 }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# Lambda Resources
+#------------------------------------------------------------------------------
+
+lambda_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "data-processor", timeout_ms = 180000 },
+      { name = "api-handler", timeout_ms = 30000 }
+    ]
+  }
+]
+
+lambda_concurrency_threshold = 900
+
+#------------------------------------------------------------------------------
+# RDS Resources
+#------------------------------------------------------------------------------
+
+rds_resources = [
+  {
+    project = "project1"
+    resources = [
+      {
+        name = "main-db"
+        overrides = {
+          freeable_memory_threshold      = 1073741824 # 1GB
+          database_connections_threshold = 100
+          free_storage_threshold         = 10737418240 # 10GB
+        }
+      }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# S3 Resources
+#------------------------------------------------------------------------------
+
+s3_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "assets-bucket" },
+      { name = "backup-bucket", overrides = { replication_enabled = true } }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# ElastiCache Resources
+#------------------------------------------------------------------------------
+
+elasticache_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "session-cache" }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# OpenSearch Resources
+#------------------------------------------------------------------------------
+
+opensearch_resources = [
+  {
+    project = "project1"
+    resources = [
+      {
+        name = "logs-domain"
+        overrides = {
+          free_storage_threshold = 51200 # 50GB in MB
+        }
+      }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# SES Resources
+#------------------------------------------------------------------------------
+
+ses_resources = [
+  {
+    project = "project1"
+    resources = [
+      { name = "notification-identity" }
+    ]
+  }
+]
+
+#------------------------------------------------------------------------------
+# Global Resources SNS Topics (us-east-1)
+# Required for CloudFront monitoring - SNS topics must be in the same region
+#------------------------------------------------------------------------------
+
+sns_topic_arns_global = {
+  WARN  = "arn:aws:sns:us-east-1:123456789012:warning-alerts"
+  ERROR = "arn:aws:sns:us-east-1:123456789012:error-alerts"
+  CRIT  = "arn:aws:sns:us-east-1:123456789012:critical-alerts"
+}
+
+#------------------------------------------------------------------------------
+# CloudFront Resources (Global - metrics in us-east-1)
+#------------------------------------------------------------------------------
+
+cloudfront_resources = [
+  {
+    project = "project1"
+    resources = [
+      {
+        distribution_id = "E1234567890ABC"
+        name            = "main-cdn"  # Optional friendly name
+      },
+      {
+        distribution_id = "EZYXWVU987654"
+        name            = "assets-cdn"
+        overrides = {
+          cache_hit_rate_threshold = 90  # Higher cache expectation for static assets
+          error_5xx_threshold      = 0.5 # More sensitive to errors
+        }
+      }
+    ]
+  }
+]
