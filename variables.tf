@@ -153,14 +153,17 @@ variable "rds_resources" {
   type = list(object({
     project = string
     resources = list(object({
-      name = string
+      name       = string
+      is_cluster = optional(bool, false)
       overrides = optional(object({
-        severity                       = optional(string)
-        description                    = optional(string)
-        freeable_memory_threshold      = optional(number)
-        cpu_threshold                  = optional(number)
-        database_connections_threshold = optional(number)
-        free_storage_threshold         = optional(number)
+        severity                               = optional(string)
+        description                            = optional(string)
+        freeable_memory_threshold              = optional(number)
+        freeable_memory_threshold_percent      = optional(number)
+        cpu_threshold                          = optional(number)
+        database_connections_threshold         = optional(number)
+        database_connections_threshold_percent = optional(number)
+        free_storage_threshold                 = optional(number)
       }), {})
     }))
   }))

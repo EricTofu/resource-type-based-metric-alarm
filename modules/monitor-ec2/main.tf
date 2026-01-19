@@ -34,10 +34,10 @@ data "aws_instance" "this" {
 resource "aws_cloudwatch_metric_alarm" "status_check" {
   for_each = local.ec2_resources
 
-  alarm_name = "${var.project}-EC2-${each.value.name}-StatusCheckFailed"
+  alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-${each.value.name}-StatusCheckFailed is in ALARM state"
+    "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed is in ALARM state"
   )
 
   namespace           = "AWS/EC2"
@@ -76,10 +76,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
 resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
   for_each = local.ec2_resources
 
-  alarm_name = "${var.project}-EC2-${each.value.name}-StatusCheckFailed_AttachedEBS"
+  alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed_AttachedEBS"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-${each.value.name}-StatusCheckFailed_AttachedEBS is in ALARM state"
+    "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed_AttachedEBS is in ALARM state"
   )
 
   namespace           = "AWS/EC2"
@@ -118,10 +118,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
 resource "aws_cloudwatch_metric_alarm" "cpu" {
   for_each = local.ec2_resources
 
-  alarm_name = "${var.project}-EC2-${each.value.name}-CPUUtilization"
+  alarm_name = "${var.project}-EC2-[${each.value.name}]-CPUUtilization"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-${each.value.name}-CPUUtilization is in ALARM state"
+    "${var.project}-EC2-[${each.value.name}]-CPUUtilization is in ALARM state"
   )
 
   namespace           = "AWS/EC2"
@@ -163,10 +163,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 resource "aws_cloudwatch_metric_alarm" "memory" {
   for_each = local.ec2_resources
 
-  alarm_name = "${var.project}-EC2-${each.value.name}-mem_used_percent"
+  alarm_name = "${var.project}-EC2-[${each.value.name}]-mem_used_percent"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-${each.value.name}-mem_used_percent is in ALARM state"
+    "${var.project}-EC2-[${each.value.name}]-mem_used_percent is in ALARM state"
   )
 
   namespace           = "CWAgent"

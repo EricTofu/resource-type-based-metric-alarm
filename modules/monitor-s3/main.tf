@@ -17,10 +17,10 @@ locals {
 resource "aws_cloudwatch_metric_alarm" "error_5xx" {
   for_each = local.s3_resources
 
-  alarm_name = "${var.project}-S3-${each.value.name}-5xxErrors"
+  alarm_name = "${var.project}-S3-[${each.value.name}]-5xxErrors"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-S3-${each.value.name}-5xxErrors is in ALARM state"
+    "${var.project}-S3-[${each.value.name}]-5xxErrors is in ALARM state"
   )
 
   namespace           = "AWS/S3"
@@ -63,10 +63,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
 resource "aws_cloudwatch_metric_alarm" "replication_failed" {
   for_each = local.s3_replication_resources
 
-  alarm_name = "${var.project}-S3-${each.value.name}-OperationsFailedReplication"
+  alarm_name = "${var.project}-S3-[${each.value.name}]-OperationsFailedReplication"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-S3-${each.value.name}-OperationsFailedReplication is in ALARM state"
+    "${var.project}-S3-[${each.value.name}]-OperationsFailedReplication is in ALARM state"
   )
 
   namespace           = "AWS/S3"

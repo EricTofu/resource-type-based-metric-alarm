@@ -27,10 +27,10 @@ data "aws_lb" "this" {
 resource "aws_cloudwatch_metric_alarm" "elb_5xx" {
   for_each = local.alb_resources
 
-  alarm_name = "${var.project}-ALB-${each.value.name}-HTTPCode_ELB_5XX_Count"
+  alarm_name = "${var.project}-ALB-[${each.value.name}]-HTTPCode_ELB_5XX_Count"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ALB-${each.value.name}-HTTPCode_ELB_5XX_Count is in ALARM state"
+    "${var.project}-ALB-[${each.value.name}]-HTTPCode_ELB_5XX_Count is in ALARM state"
   )
 
   namespace           = "AWS/ApplicationELB"
@@ -72,10 +72,10 @@ resource "aws_cloudwatch_metric_alarm" "elb_5xx" {
 resource "aws_cloudwatch_metric_alarm" "target_5xx" {
   for_each = local.alb_resources
 
-  alarm_name = "${var.project}-ALB-${each.value.name}-HTTPCode_Target_5XX_Count"
+  alarm_name = "${var.project}-ALB-[${each.value.name}]-HTTPCode_Target_5XX_Count"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ALB-${each.value.name}-HTTPCode_Target_5XX_Count is in ALARM state"
+    "${var.project}-ALB-[${each.value.name}]-HTTPCode_Target_5XX_Count is in ALARM state"
   )
 
   namespace           = "AWS/ApplicationELB"
@@ -117,10 +117,10 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
 resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
   for_each = local.alb_resources
 
-  alarm_name = "${var.project}-ALB-${each.value.name}-UnHealthyHostCount"
+  alarm_name = "${var.project}-ALB-[${each.value.name}]-UnHealthyHostCount"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ALB-${each.value.name}-UnHealthyHostCount is in ALARM state"
+    "${var.project}-ALB-[${each.value.name}]-UnHealthyHostCount is in ALARM state"
   )
 
   namespace           = "AWS/ApplicationELB"
@@ -162,10 +162,10 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
 resource "aws_cloudwatch_metric_alarm" "target_response_time" {
   for_each = local.alb_resources
 
-  alarm_name = "${var.project}-ALB-${each.value.name}-TargetResponseTime"
+  alarm_name = "${var.project}-ALB-[${each.value.name}]-TargetResponseTime"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ALB-${each.value.name}-TargetResponseTime is in ALARM state"
+    "${var.project}-ALB-[${each.value.name}]-TargetResponseTime is in ALARM state"
   )
 
   namespace           = "AWS/ApplicationELB"

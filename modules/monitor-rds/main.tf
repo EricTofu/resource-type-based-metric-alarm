@@ -31,6 +31,19 @@ locals {
     "db.r6g.large"  = 17179869184 # 16GB
     "db.r6g.xlarge" = 34359738368 # 32GB
   }
+
+  # Multipliers to estimate max_connections from RAM (in bytes)
+  # Formula: Memory / Multiplier
+  engine_max_connections_multiplier = {
+    "mysql"             = 12582912 # 12MB per connection
+    "postgres"          = 9531392  # ~9.5MB per connection
+    "mariadb"           = 12582912
+    "aurora-mysql"      = 12582912
+    "aurora-postgresql" = 9531392
+  }
+
+  # Fallback multiplier if engine not found
+  default_engine_multiplier = 10000000 # 10MB as safe default
 }
 
 #------------------------------------------------------------------------------
@@ -87,21 +100,22 @@ data "aws_db_instance" "this" {
 resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
   for_each = local.all_instances
 
-  alarm_name = "${var.project}-RDS-${each.key}-FreeableMemory"
+  alarm_name = "${var.project}-RDS-[${each.key}]-FreeableMemory"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-${each.key}-FreeableMemory is in ALARM state"
+    "${var.project}-RDS-[${each.key}]-FreeableMemory is in ALARM state"
   )
 
   namespace           = "AWS/RDS"
   metric_name         = "FreeableMemory"
   statistic           = "Average"
   comparison_operator = "LessThanThreshold"
-  threshold = try(
-    each.value.overrides.freeable_memory_threshold, # 1. Use manual byte threshold if provided
-    (local.instance_memory_map[data.aws_db_instance.this[each.key].db_instance_class] *
-    coalesce(try(each.value.overrides.freeable_memory_threshold_percent, null), var.default_freeable_memory_threshold_percent) / 100), # 2. Or calculate from RAM %
-    var.default_freeable_memory_threshold                                                                                              # 3. Last fallback to hardcoded default bytes
+  threshold = coalesce(
+    try(each.value.overrides.freeable_memory_threshold, null), # 1. Use manual byte threshold if provided
+    try(local.instance_memory_map[data.aws_db_instance.this[each.key].db_instance_class] *
+      coalesce(try(each.value.overrides.freeable_memory_threshold_percent, null), var.default_freeable_memory_threshold_percent) / 100,
+    null),                                # 2. Or calculate from RAM % (if class matches map)
+    var.default_freeable_memory_threshold # 3. Last fallback to hardcoded default bytes
   )
   evaluation_periods  = 5
   datapoints_to_alarm = 5
@@ -135,10 +149,10 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
 resource "aws_cloudwatch_metric_alarm" "cpu" {
   for_each = local.all_instances
 
-  alarm_name = "${var.project}-RDS-${each.key}-CPUUtilization"
+  alarm_name = "${var.project}-RDS-[${each.key}]-CPUUtilization"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-${each.key}-CPUUtilization is in ALARM state"
+    "${var.project}-RDS-[${each.key}]-CPUUtilization is in ALARM state"
   )
 
   namespace           = "AWS/RDS"
@@ -181,10 +195,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 resource "aws_cloudwatch_metric_alarm" "database_connections" {
   for_each = local.all_instances
 
-  alarm_name = "${var.project}-RDS-${each.key}-DatabaseConnections"
+  alarm_name = "${var.project}-RDS-[${each.key}]-DatabaseConnections"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-${each.key}-DatabaseConnections is in ALARM state"
+    "${var.project}-RDS-[${each.key}]-DatabaseConnections is in ALARM state"
   )
 
   namespace           = "AWS/RDS"
@@ -192,8 +206,16 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
   statistic           = "Average"
   comparison_operator = "GreaterThanThreshold"
   threshold = coalesce(
-    try(each.value.overrides.database_connections_threshold, null),
-    var.default_database_connections_threshold
+    try(each.value.overrides.database_connections_threshold, null), # 1. Manual byte threshold
+    try(
+      (local.instance_memory_map[data.aws_db_instance.this[each.key].db_instance_class] /
+        coalesce(
+          local.engine_max_connections_multiplier[data.aws_db_instance.this[each.key].engine],
+          local.default_engine_multiplier
+      )) * coalesce(try(each.value.overrides.database_connections_threshold_percent, null), var.default_database_connections_threshold_percent) / 100,
+      null
+    ),                                         # 2. Calculated from Memory %
+    var.default_database_connections_threshold # 3. Default fallback
   )
   evaluation_periods  = 5
   datapoints_to_alarm = 5
@@ -227,10 +249,10 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
 resource "aws_cloudwatch_metric_alarm" "free_storage" {
   for_each = local.all_instances
 
-  alarm_name = "${var.project}-RDS-${each.key}-FreeStorageSpace"
+  alarm_name = "${var.project}-RDS-[${each.key}]-FreeStorageSpace"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-${each.key}-FreeStorageSpace is in ALARM state"
+    "${var.project}-RDS-[${each.key}]-FreeStorageSpace is in ALARM state"
   )
 
   namespace           = "AWS/RDS"
@@ -273,10 +295,10 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
 resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
   for_each = local.all_instances
 
-  alarm_name = "${var.project}-RDS-${each.key}-EngineUptime"
+  alarm_name = "${var.project}-RDS-[${each.key}]-EngineUptime"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-${each.key}-EngineUptime is in ALARM state"
+    "${var.project}-RDS-[${each.key}]-EngineUptime is in ALARM state"
   )
 
   namespace           = "AWS/RDS"

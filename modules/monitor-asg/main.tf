@@ -10,10 +10,10 @@ locals {
 resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
   for_each = local.asg_resources
 
-  alarm_name = "${var.project}-ASG-${each.value.name}-GroupInServiceCapacity"
+  alarm_name = "${var.project}-ASG-[${each.value.name}]-GroupInServiceCapacity"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ASG-${each.value.name}-GroupInServiceCapacity is in ALARM state"
+    "${var.project}-ASG-[${each.value.name}]-GroupInServiceCapacity is in ALARM state"
   )
 
   namespace           = "AWS/AutoScaling"

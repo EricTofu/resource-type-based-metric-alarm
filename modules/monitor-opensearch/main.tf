@@ -16,10 +16,10 @@ locals {
 resource "aws_cloudwatch_metric_alarm" "cpu" {
   for_each = local.opensearch_resources
 
-  alarm_name = "${var.project}-OpenSearch-${each.value.name}-CPUUtilization"
+  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-CPUUtilization"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-${each.value.name}-CPUUtilization is in ALARM state"
+    "${var.project}-OpenSearch-[${each.value.name}]-CPUUtilization is in ALARM state"
   )
 
   namespace           = "AWS/ES"
@@ -62,10 +62,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
   for_each = local.opensearch_resources
 
-  alarm_name = "${var.project}-OpenSearch-${each.value.name}-JVMMemoryPressure"
+  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-JVMMemoryPressure"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-${each.value.name}-JVMMemoryPressure is in ALARM state"
+    "${var.project}-OpenSearch-[${each.value.name}]-JVMMemoryPressure is in ALARM state"
   )
 
   namespace           = "AWS/ES"
@@ -108,10 +108,10 @@ resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
 resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
   for_each = local.opensearch_resources
 
-  alarm_name = "${var.project}-OpenSearch-${each.value.name}-OldGenJVMMemoryPressure"
+  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-${each.value.name}-OldGenJVMMemoryPressure is in ALARM state"
+    "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure is in ALARM state"
   )
 
   namespace           = "AWS/ES"
@@ -154,10 +154,10 @@ resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
 resource "aws_cloudwatch_metric_alarm" "free_storage" {
   for_each = local.opensearch_resources
 
-  alarm_name = "${var.project}-OpenSearch-${each.value.name}-FreeStorageSpace"
+  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-FreeStorageSpace"
   alarm_description = coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-${each.value.name}-FreeStorageSpace is in ALARM state"
+    "${var.project}-OpenSearch-[${each.value.name}]-FreeStorageSpace is in ALARM state"
   )
 
   namespace           = "AWS/ES"

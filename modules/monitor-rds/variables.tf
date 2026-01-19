@@ -9,13 +9,14 @@ variable "resources" {
     name       = string
     is_cluster = optional(bool, false)
     overrides = optional(object({
-      severity                          = optional(string)
-      description                       = optional(string)
-      freeable_memory_threshold         = optional(number)
-      freeable_memory_threshold_percent = optional(number)
-      cpu_threshold                     = optional(number)
-      database_connections_threshold    = optional(number)
-      free_storage_threshold            = optional(number)
+      severity                               = optional(string)
+      description                            = optional(string)
+      freeable_memory_threshold              = optional(number)
+      freeable_memory_threshold_percent      = optional(number)
+      cpu_threshold                          = optional(number)
+      database_connections_threshold         = optional(number)
+      database_connections_threshold_percent = optional(number)
+      free_storage_threshold                 = optional(number)
     }), {})
   }))
 }
@@ -55,6 +56,12 @@ variable "default_database_connections_threshold" {
   description = "Default threshold for DatabaseConnections"
   type        = number
   default     = 2700
+}
+
+variable "default_database_connections_threshold_percent" {
+  description = "Default database connections threshold percentage (if not overridden per resource)"
+  type        = number
+  default     = 80
 }
 
 variable "default_free_storage_threshold" {
