@@ -8,12 +8,13 @@ variable "resources" {
   type = list(object({
     name = string
     overrides = optional(object({
-      severity                       = optional(string)
-      description                    = optional(string)
-      freeable_memory_threshold      = optional(number)
-      cpu_threshold                  = optional(number)
-      database_connections_threshold = optional(number)
-      free_storage_threshold         = optional(number)
+      severity                          = optional(string)
+      description                       = optional(string)
+      freeable_memory_threshold         = optional(number)
+      freeable_memory_threshold_percent = optional(number)
+      cpu_threshold                     = optional(number)
+      database_connections_threshold    = optional(number)
+      free_storage_threshold            = optional(number)
     }), {})
   }))
 }
@@ -32,9 +33,15 @@ variable "sns_topic_arns" {
 #------------------------------------------------------------------------------
 
 variable "default_freeable_memory_threshold" {
-  description = "Default threshold for FreeableMemory (bytes)"
+  description = "Default threshold for FreeableMemory (bytes). Only used if percentage calculation is disabled or fails."
   type        = number
   default     = 1073741824 # 1GB
+}
+
+variable "default_freeable_memory_threshold_percent" {
+  description = "Default threshold for FreeableMemory as a percentage of total RAM (e.g., 10 for 10%)"
+  type        = number
+  default     = 10
 }
 
 variable "default_cpu_threshold" {

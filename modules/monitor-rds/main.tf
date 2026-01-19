@@ -8,6 +8,38 @@ locals {
     free_storage         = "ERROR"
     engine_uptime        = "CRIT"
   }
+
+  # RAM in Bytes mapping for common RDS classes
+  # Fallback to local.instance_memory_map[class] or use the provided byte threshold
+  # 1GB = 1073741824 Bytes
+  instance_memory_map = {
+    "db.t3.micro"   = 1073741824  # 1GB
+    "db.t3.small"   = 2147483648  # 2GB
+    "db.t3.medium"  = 4294967296  # 4GB
+    "db.t3.large"   = 8589934592  # 8GB
+    "db.t4g.micro"  = 1073741824  # 1GB
+    "db.t4g.small"  = 2147483648  # 2GB
+    "db.t4g.medium" = 4294967296  # 4GB
+    "db.t4g.large"  = 8589934592  # 8GB
+    "db.m5.large"   = 8589934592  # 8GB
+    "db.m5.xlarge"  = 17179869184 # 16GB
+    "db.m6g.large"  = 8589934592  # 8GB
+    "db.m6g.xlarge" = 17179869184 # 16GB
+    "db.r5.large"   = 17179869184 # 16GB
+    "db.r5.xlarge"  = 34359738368 # 32GB
+    "db.r6g.large"  = 17179869184 # 16GB
+    "db.r6g.xlarge" = 34359738368 # 32GB
+  }
+}
+
+#------------------------------------------------------------------------------
+# Data source to get RDS instance details (class)
+#------------------------------------------------------------------------------
+
+data "aws_db_instance" "this" {
+  for_each = local.rds_resources
+
+  db_instance_identifier = each.value.name
 }
 
 #------------------------------------------------------------------------------
@@ -27,9 +59,11 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
   metric_name         = "FreeableMemory"
   statistic           = "Average"
   comparison_operator = "LessThanThreshold"
-  threshold = coalesce(
-    try(each.value.overrides.freeable_memory_threshold, null),
-    var.default_freeable_memory_threshold
+  threshold = try(
+    each.value.overrides.freeable_memory_threshold, # 1. Use manual byte threshold if provided
+    (local.instance_memory_map[data.aws_db_instance.this[each.key].db_instance_class] *
+    coalesce(try(each.value.overrides.freeable_memory_threshold_percent, null), var.default_freeable_memory_threshold_percent) / 100), # 2. Or calculate from RAM %
+    var.default_freeable_memory_threshold                                                                                              # 3. Last fallback to hardcoded default bytes
   )
   evaluation_periods  = 5
   datapoints_to_alarm = 5
