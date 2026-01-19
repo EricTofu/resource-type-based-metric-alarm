@@ -104,6 +104,13 @@ rds_resources = [
           database_connections_threshold = 100
           free_storage_threshold         = 10737418240 # 10GB
         }
+      },
+      {
+        name       = "aurora-cluster-prod"
+        is_cluster = true
+        overrides = {
+          freeable_memory_threshold_percent = 15
+        }
       }
     ]
   }

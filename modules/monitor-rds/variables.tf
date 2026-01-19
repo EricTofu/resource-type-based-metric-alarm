@@ -6,7 +6,8 @@ variable "project" {
 variable "resources" {
   description = "List of RDS/Aurora resources to monitor"
   type = list(object({
-    name = string
+    name       = string
+    is_cluster = optional(bool, false)
     overrides = optional(object({
       severity                          = optional(string)
       description                       = optional(string)
