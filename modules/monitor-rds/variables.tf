@@ -17,6 +17,7 @@ variable "resources" {
       database_connections_threshold         = optional(number)
       database_connections_threshold_percent = optional(number)
       free_storage_threshold                 = optional(number)
+      volume_bytes_used_threshold            = optional(number)
     }), {})
   }))
 }
@@ -68,4 +69,10 @@ variable "default_free_storage_threshold" {
   description = "Default threshold for FreeStorageSpace (bytes)"
   type        = number
   default     = 10737418240 # 10GB
+}
+
+variable "default_volume_bytes_used_threshold" {
+  description = "Default threshold for VolumeBytesUsed (bytes). Only applicable to Aurora clusters."
+  type        = number
+  default     = 107374182400 # 100GB
 }

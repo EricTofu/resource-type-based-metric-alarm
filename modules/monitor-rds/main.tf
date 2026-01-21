@@ -7,6 +7,7 @@ locals {
     cpu                  = "ERROR"
     database_connections = "ERROR"
     free_storage         = "ERROR"
+    volume_bytes_used    = "ERROR"
     engine_uptime        = "CRIT"
   }
 
@@ -328,5 +329,50 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
     ResourceType = "RDS"
     ResourceName = each.key
     ClusterName  = each.value.cluster_name
+  }
+}
+
+#------------------------------------------------------------------------------
+# VolumeBytesUsed Alarm (Aurora Cluster level)
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "volume_bytes_used" {
+  for_each = local.cluster_resources
+
+  alarm_name = "${var.project}-RDS-[${each.key}]-VolumeBytesUsed"
+  alarm_description = coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-RDS-[${each.key}]-VolumeBytesUsed is in ALARM state"
+  )
+
+  namespace           = "AWS/RDS"
+  metric_name         = "VolumeBytesUsed"
+  statistic           = "Maximum"
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.volume_bytes_used_threshold, null),
+    var.default_volume_bytes_used_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    DBClusterIdentifier = each.key
+  }
+
+  alarm_actions = [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.volume_bytes_used
+    )]
+  ]
+
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Project      = var.project
+    ResourceType = "RDS/Aurora"
+    ResourceName = each.key
   }
 }

@@ -164,6 +164,7 @@ variable "rds_resources" {
         database_connections_threshold         = optional(number)
         database_connections_threshold_percent = optional(number)
         free_storage_threshold                 = optional(number)
+        volume_bytes_used_threshold            = optional(number)
       }), {})
     }))
   }))
