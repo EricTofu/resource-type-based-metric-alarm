@@ -32,10 +32,10 @@ resource "aws_cloudwatch_metric_alarm" "error_4xx" {
   for_each = local.cloudfront_resources
 
   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-4xxErrorRate"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_4xx)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-4xxErrorRate is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/CloudFront"
   metric_name         = "4xxErrorRate"
@@ -78,10 +78,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
   for_each = local.cloudfront_resources
 
   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-5xxErrorRate"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_5xx)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-5xxErrorRate is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/CloudFront"
   metric_name         = "5xxErrorRate"
@@ -124,10 +124,10 @@ resource "aws_cloudwatch_metric_alarm" "origin_latency" {
   for_each = local.cloudfront_resources
 
   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-OriginLatency"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.origin_latency)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-OriginLatency is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/CloudFront"
   metric_name         = "OriginLatency"
@@ -170,10 +170,10 @@ resource "aws_cloudwatch_metric_alarm" "cache_hit_rate" {
   for_each = local.cloudfront_resources
 
   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-CacheHitRate"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cache_hit_rate)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-CacheHitRate is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/CloudFront"
   metric_name         = "CacheHitRate"

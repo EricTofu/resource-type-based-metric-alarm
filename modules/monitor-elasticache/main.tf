@@ -11,10 +11,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
   for_each = local.elasticache_resources
 
   alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-CPUUtilization"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-ElastiCache-[${each.value.name}]-CPUUtilization is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/ElastiCache"
   metric_name         = "CPUUtilization"
@@ -56,10 +56,10 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
   for_each = local.elasticache_resources
 
   alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-DatabaseMemoryUsagePercentage"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-ElastiCache-[${each.value.name}]-DatabaseMemoryUsagePercentage is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/ElastiCache"
   metric_name         = "DatabaseMemoryUsagePercentage"

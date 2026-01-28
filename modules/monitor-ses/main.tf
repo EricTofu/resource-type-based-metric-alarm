@@ -11,10 +11,10 @@ resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
   for_each = local.ses_resources
 
   alarm_name = "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/SES"
   metric_name         = "Reputation.BounceRate"

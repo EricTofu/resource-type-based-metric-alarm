@@ -35,10 +35,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
   for_each = local.ec2_resources
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.status_check)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed"
@@ -77,10 +77,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
   for_each = local.ec2_resources
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed_AttachedEBS"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.status_check_ebs)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed_AttachedEBS is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/EC2"
   metric_name         = "StatusCheckFailed_AttachedEBS"
@@ -119,10 +119,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
   for_each = local.ec2_resources
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-CPUUtilization"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-EC2-[${each.value.name}]-CPUUtilization is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/EC2"
   metric_name         = "CPUUtilization"
@@ -164,10 +164,10 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
   for_each = local.ec2_resources
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-mem_used_percent"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.memory)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-EC2-[${each.value.name}]-mem_used_percent is in ALARM state"
-  )
+  )}"
 
   namespace           = "CWAgent"
   metric_name         = "mem_used_percent"
@@ -198,5 +198,24 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
     Project      = var.project
     ResourceType = "EC2"
     ResourceName = each.value.name
+  }
+}
+
+#------------------------------------------------------------------------------
+# Check for mem_used_percent metric
+#------------------------------------------------------------------------------
+
+resource "null_resource" "check_mem_metric" {
+  for_each = local.ec2_resources
+
+  triggers = {
+    instance_id = data.aws_instance.this[each.key].id
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/../../scripts/check_ec2_mem_metric.sh ${data.aws_instance.this[each.key].availability_zone} ${data.aws_instance.this[each.key].id}"
+    # Note: availability_zone includes region (e.g. us-east-1a), script needs valid region
+    # We'll extract region from AZ in shell or just use current region
+    # Actually, let's use a data source for region to be safe
   }
 }

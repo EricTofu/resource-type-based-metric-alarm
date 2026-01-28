@@ -102,10 +102,10 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
   for_each = local.all_instances
 
   alarm_name = "${var.project}-RDS-[${each.key}]-FreeableMemory"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.freeable_memory)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-RDS-[${each.key}]-FreeableMemory is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/RDS"
   metric_name         = "FreeableMemory"
@@ -151,10 +151,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
   for_each = local.all_instances
 
   alarm_name = "${var.project}-RDS-[${each.key}]-CPUUtilization"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-RDS-[${each.key}]-CPUUtilization is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/RDS"
   metric_name         = "CPUUtilization"
@@ -197,10 +197,10 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
   for_each = local.all_instances
 
   alarm_name = "${var.project}-RDS-[${each.key}]-DatabaseConnections"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.database_connections)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-RDS-[${each.key}]-DatabaseConnections is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/RDS"
   metric_name         = "DatabaseConnections"
@@ -251,10 +251,10 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
   for_each = local.all_instances
 
   alarm_name = "${var.project}-RDS-[${each.key}]-FreeStorageSpace"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.free_storage)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-RDS-[${each.key}]-FreeStorageSpace is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/RDS"
   metric_name         = "FreeStorageSpace"
@@ -297,10 +297,10 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
   for_each = local.all_instances
 
   alarm_name = "${var.project}-RDS-[${each.key}]-EngineUptime"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.engine_uptime)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-RDS-[${each.key}]-EngineUptime is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/RDS"
   metric_name         = "EngineUptime"
@@ -340,10 +340,10 @@ resource "aws_cloudwatch_metric_alarm" "volume_bytes_used" {
   for_each = local.cluster_resources
 
   alarm_name = "${var.project}-RDS-[${each.key}]-VolumeBytesUsed"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.volume_bytes_used)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-RDS-[${each.key}]-VolumeBytesUsed is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/RDS"
   metric_name         = "VolumeBytesUsed"

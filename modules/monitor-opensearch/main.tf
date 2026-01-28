@@ -17,10 +17,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
   for_each = local.opensearch_resources
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-CPUUtilization"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-OpenSearch-[${each.value.name}]-CPUUtilization is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/ES"
   metric_name         = "CPUUtilization"
@@ -63,10 +63,10 @@ resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
   for_each = local.opensearch_resources
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-JVMMemoryPressure"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.jvm_memory)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-OpenSearch-[${each.value.name}]-JVMMemoryPressure is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/ES"
   metric_name         = "JVMMemoryPressure"
@@ -109,10 +109,10 @@ resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
   for_each = local.opensearch_resources
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.old_gen_jvm)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/ES"
   metric_name         = "OldGenJVMMemoryPressure"
@@ -155,10 +155,10 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
   for_each = local.opensearch_resources
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-FreeStorageSpace"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.free_storage)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-OpenSearch-[${each.value.name}]-FreeStorageSpace is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/ES"
   metric_name         = "FreeStorageSpace"

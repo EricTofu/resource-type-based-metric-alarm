@@ -8,6 +8,12 @@ variable "aws_region" {
   default     = "ap-northeast-1"
 }
 
+variable "aws_profile" {
+  description = "AWS profile"
+  type        = string
+  default     = "default"
+}
+
 variable "sns_topic_arns" {
   description = "SNS topic ARNs for alarm actions, mapped by severity level"
   type = object({

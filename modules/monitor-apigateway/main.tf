@@ -11,10 +11,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
   for_each = local.apigateway_resources
 
   alarm_name = "${var.project}-APIGateway-[${each.value.name}]-5XXError"
-  alarm_description = coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-APIGateway-[${each.value.name}]-5XXError is in ALARM state"
-  )
+  )}"
 
   namespace           = "AWS/ApiGateway"
   metric_name         = "5XXError"
