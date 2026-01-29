@@ -8,6 +8,7 @@ variable "resources" {
   type = list(object({
     name       = string
     is_cluster = optional(bool, false)
+    serverless = optional(bool, false)
     overrides = optional(object({
       severity                               = optional(string)
       description                            = optional(string)
@@ -18,6 +19,8 @@ variable "resources" {
       database_connections_threshold_percent = optional(number)
       free_storage_threshold                 = optional(number)
       volume_bytes_used_threshold            = optional(number)
+      acu_utilization_threshold              = optional(number)
+      serverless_capacity_threshold          = optional(number)
     }), {})
   }))
 }
@@ -75,4 +78,16 @@ variable "default_volume_bytes_used_threshold" {
   description = "Default threshold for VolumeBytesUsed (bytes). Only applicable to Aurora clusters."
   type        = number
   default     = 107374182400 # 100GB
+}
+
+variable "default_acu_utilization_threshold" {
+  description = "Default threshold for ACUUtilization"
+  type        = number
+  default     = 90
+}
+
+variable "default_serverless_capacity_threshold" {
+  description = "Default threshold for ServerlessDatabaseCapacity"
+  type        = number
+  default     = 128
 }

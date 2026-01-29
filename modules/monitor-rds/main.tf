@@ -9,6 +9,8 @@ locals {
     free_storage         = "ERROR"
     volume_bytes_used    = "ERROR"
     engine_uptime        = "CRIT"
+    acu_utilization      = "ERROR"
+    serverless_capacity  = "ERROR"
   }
 
   # RAM in Bytes mapping for common RDS classes
@@ -64,6 +66,7 @@ locals {
         name         = member
         overrides    = local.cluster_resources[cluster_name].overrides
         is_cluster   = true
+        serverless   = local.cluster_resources[cluster_name].serverless
         cluster_name = cluster_name
       }
     ]
@@ -75,6 +78,7 @@ locals {
       name         = v.name
       overrides    = v.overrides
       is_cluster   = false
+      serverless   = v.serverless
       cluster_name = null
     }],
     local.expanded_cluster_instances
@@ -374,5 +378,97 @@ resource "aws_cloudwatch_metric_alarm" "volume_bytes_used" {
     Project      = var.project
     ResourceType = "RDS/Aurora"
     ResourceName = each.key
+  }
+}
+
+#------------------------------------------------------------------------------
+# ACUUtilization Alarm (Aurora Serverless v2)
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "acu_utilization" {
+  for_each = { for k, v in local.all_instances : k => v if v.serverless }
+
+  alarm_name = "${var.project}-RDS-[${each.key}]-ACUUtilization"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.acu_utilization)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-RDS-[${each.key}]-ACUUtilization is in ALARM state"
+  )}"
+
+  namespace           = "AWS/RDS"
+  metric_name         = "ACUUtilization"
+  statistic           = "Maximum"
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.acu_utilization_threshold, null),
+    var.default_acu_utilization_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    DBInstanceIdentifier = each.key
+  }
+
+  alarm_actions = [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.acu_utilization
+    )]
+  ]
+
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Project      = var.project
+    ResourceType = "RDS"
+    ResourceName = each.key
+    ClusterName  = each.value.cluster_name
+  }
+}
+
+#------------------------------------------------------------------------------
+# ServerlessDatabaseCapacity Alarm (Aurora Serverless v2)
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "serverless_capacity" {
+  for_each = { for k, v in local.all_instances : k => v if v.serverless }
+
+  alarm_name = "${var.project}-RDS-[${each.key}]-ServerlessDatabaseCapacity"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.serverless_capacity)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-RDS-[${each.key}]-ServerlessDatabaseCapacity is in ALARM state"
+  )}"
+
+  namespace           = "AWS/RDS"
+  metric_name         = "ServerlessDatabaseCapacity"
+  statistic           = "Maximum"
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.serverless_capacity_threshold, null),
+    var.default_serverless_capacity_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    DBInstanceIdentifier = each.key
+  }
+
+  alarm_actions = [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.serverless_capacity
+    )]
+  ]
+
+  treat_missing_data = "notBreaching"
+
+  tags = {
+    Project      = var.project
+    ResourceType = "RDS"
+    ResourceName = each.key
+    ClusterName  = each.value.cluster_name
   }
 }
