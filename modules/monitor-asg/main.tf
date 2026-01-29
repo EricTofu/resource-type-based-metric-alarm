@@ -62,7 +62,7 @@ resource "null_resource" "check_asg_metrics" {
   # Let's add a data source for current region to be clean.
 
   provisioner "local-exec" {
-    command = "${path.module}/../../scripts/check_asg_metrics.sh ${data.aws_region.current.name} ${each.value.name}"
+    command = "${path.module}/../../scripts/check_asg_metrics.sh ${data.aws_region.current.region} ${each.value.name}"
   }
 }
 

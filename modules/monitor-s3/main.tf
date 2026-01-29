@@ -111,7 +111,7 @@ resource "null_resource" "check_s3_metrics" {
   }
 
   provisioner "local-exec" {
-    command = "${path.module}/../../scripts/check_s3_metrics.sh ${data.aws_region.current.name} ${each.value.name}"
+    command = "${path.module}/../../scripts/check_s3_metrics.sh ${data.aws_region.current.region} ${each.value.name}"
   }
 }
 
