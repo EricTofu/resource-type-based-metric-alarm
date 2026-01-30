@@ -161,6 +161,7 @@ variable "rds_resources" {
     resources = list(object({
       name       = string
       is_cluster = optional(bool, false)
+      serverless = optional(bool, false)
       overrides = optional(object({
         severity                               = optional(string)
         description                            = optional(string)
@@ -171,6 +172,8 @@ variable "rds_resources" {
         database_connections_threshold_percent = optional(number)
         free_storage_threshold                 = optional(number)
         volume_bytes_used_threshold            = optional(number)
+        acu_utilization_threshold              = optional(number)
+        serverless_capacity_threshold          = optional(number)
       }), {})
     }))
   }))
