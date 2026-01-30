@@ -7,7 +7,10 @@ locals {
     if try(res.overrides.replication_enabled, false)
   }
 
-  default_severity = "WARN"
+  default_severities = {
+    error_5xx          = "WARN"
+    replication_failed = "WARN"
+  }
 }
 
 #------------------------------------------------------------------------------
@@ -18,7 +21,7 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
   for_each = local.s3_resources
 
   alarm_name = "${var.project}-S3-[${each.value.name}]-5xxErrors"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_5xx)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-S3-[${each.value.name}]-5xxErrors is in ALARM state"
   )}"
@@ -43,7 +46,7 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
   alarm_actions = [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
-      local.default_severity
+      local.default_severities.error_5xx
     )]
   ]
 
@@ -64,7 +67,7 @@ resource "aws_cloudwatch_metric_alarm" "replication_failed" {
   for_each = local.s3_replication_resources
 
   alarm_name = "${var.project}-S3-[${each.value.name}]-OperationsFailedReplication"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.replication_failed)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-S3-[${each.value.name}]-OperationsFailedReplication is in ALARM state"
   )}"
@@ -86,7 +89,7 @@ resource "aws_cloudwatch_metric_alarm" "replication_failed" {
   alarm_actions = [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
-      local.default_severity
+      local.default_severities.replication_failed
     )]
   ]
 

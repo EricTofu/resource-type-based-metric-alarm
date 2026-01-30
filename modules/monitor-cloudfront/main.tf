@@ -2,6 +2,7 @@
 # CloudFront Monitoring Module
 #------------------------------------------------------------------------------
 
+# Required to mitigate "Reference to undefined provider" warning when passing aliased provider
 terraform {
   required_providers {
     aws = {

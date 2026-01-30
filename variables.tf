@@ -115,8 +115,9 @@ variable "asg_resources" {
       name             = string
       desired_capacity = number
       overrides = optional(object({
-        severity    = optional(string)
-        description = optional(string)
+        severity           = optional(string)
+        description        = optional(string)
+        capacity_threshold = optional(number)
       }), {})
     }))
   }))

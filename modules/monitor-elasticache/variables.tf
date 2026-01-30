@@ -32,7 +32,7 @@ variable "sns_topic_arns" {
 variable "default_cpu_threshold" {
   description = "Default threshold for CPUUtilization"
   type        = number
-  default     = 90
+  default     = 80
 }
 
 variable "default_memory_threshold" {

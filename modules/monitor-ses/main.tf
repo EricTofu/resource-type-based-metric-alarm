@@ -1,6 +1,9 @@
 locals {
-  ses_resources    = { for res in var.resources : res.name => res }
-  default_severity = "WARN"
+  ses_resources = { for res in var.resources : res.name => res }
+
+  default_severities = {
+    bounce_rate = "WARN"
+  }
 }
 
 #------------------------------------------------------------------------------
@@ -11,7 +14,7 @@ resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
   for_each = local.ses_resources
 
   alarm_name = "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.bounce_rate)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate is in ALARM state"
   )}"
@@ -31,7 +34,7 @@ resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
   alarm_actions = [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
-      local.default_severity
+      local.default_severities.bounce_rate
     )]
   ]
 

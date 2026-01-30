@@ -1,6 +1,9 @@
 locals {
-  asg_resources    = { for res in var.resources : res.name => res }
-  default_severity = "ERROR"
+  asg_resources = { for res in var.resources : res.name => res }
+
+  default_severities = {
+    in_service_capacity = "ERROR"
+  }
 }
 
 #------------------------------------------------------------------------------
@@ -11,7 +14,7 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
   for_each = local.asg_resources
 
   alarm_name = "${var.project}-ASG-[${each.value.name}]-GroupInServiceCapacity"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severity)}]-${coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.in_service_capacity)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-ASG-[${each.value.name}]-GroupInServiceCapacity is in ALARM state"
   )}"
@@ -20,7 +23,10 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
   metric_name         = "GroupInServiceCapacity"
   statistic           = "Average"
   comparison_operator = "LessThanThreshold"
-  threshold           = each.value.desired_capacity
+  threshold = coalesce(
+    try(each.value.overrides.capacity_threshold, null),
+    each.value.desired_capacity
+  )
   evaluation_periods  = 10
   datapoints_to_alarm = 10
   period              = 60
@@ -32,7 +38,7 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
   alarm_actions = [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
-      local.default_severity
+      local.default_severities.in_service_capacity
     )]
   ]
 

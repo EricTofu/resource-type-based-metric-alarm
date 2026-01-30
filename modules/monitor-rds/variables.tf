@@ -53,7 +53,7 @@ variable "default_freeable_memory_threshold_percent" {
 variable "default_cpu_threshold" {
   description = "Default threshold for CPUUtilization"
   type        = number
-  default     = 90
+  default     = 80
 }
 
 variable "default_database_connections_threshold" {
