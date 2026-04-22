@@ -32,3 +32,6 @@ override.tf.json
 # HCLEDIT
 .hcledit
 
+# Git worktrees
+.worktrees/
+
