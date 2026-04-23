@@ -1,0 +1,27 @@
+service           = "billing"
+alias             = "dev"
+aws_region        = "<PRIMARY_REGION>"
+ops_bucket        = "<ORG>-tfstate"
+ops_state_role_arn = "<OPS_STATE_ROLE_ARN>"
+lambda_concurrency_threshold = 80
+
+# TODO(operator): fill each *_resources list from the old root's terraform.tfvars
+# entries where project == "billing". Drop the outer project/resources wrap.
+# Each entry is now bare (no project field).
+
+alb_resources          = []
+apigateway_resources   = []
+asg_resources          = []
+cloudfront_resources   = []
+ec2_resources          = []
+elasticache_resources  = []
+lambda_resources       = []
+opensearch_resources   = []
+rds_resources          = []
+s3_resources           = []
+ses_resources          = []
+
+common_tags = {
+  ManagedBy = "Terraform"
+  Project   = "billing"
+}

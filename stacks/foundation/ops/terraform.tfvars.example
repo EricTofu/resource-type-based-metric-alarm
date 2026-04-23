@@ -1,0 +1,28 @@
+# Terraform.tfvars for foundation/ops stack
+# Fill in the placeholders before running terraform init/apply
+
+aws_region            = "<PRIMARY_REGION>"
+bootstrap_profile     = "<OPS_BOOTSTRAP_PROFILE>"
+ops_account_id        = "<OPS_ACCOUNT_ID>"
+caller_principal_arn  = "<CALLER_PRINCIPAL_ARN>"
+org                   = "<ORG>"
+
+accounts = {
+  dev = {
+    id                 = "<ACCOUNT_ID_dev>"
+    tf_deployer_role_arn = "<TF_DEPLOYER_ROLE_ARN_dev>"
+  }
+  stg = {
+    id                 = "<ACCOUNT_ID_stg>"
+    tf_deployer_role_arn = "<TF_DEPLOYER_ROLE_ARN_stg>"
+  }
+  prod = {
+    id                 = "<ACCOUNT_ID_prod>"
+    tf_deployer_role_arn = "<TF_DEPLOYER_ROLE_ARN_prod>"
+  }
+}
+
+common_tags = {
+  ManagedBy = "Terraform"
+  Project   = "cloudwatch-alarm-library"
+}

@@ -1,0 +1,67 @@
+name: Terraform CI
+
+on:
+  pull_request:
+
+jobs:
+  detect-stacks:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: detect
+        run: |
+          stacks=$(find stacks -name versions.tf -printf '%h\n' | sort | jq -R . | jq -cs .)
+          echo "matrix=$stacks" >> "$GITHUB_OUTPUT"
+
+  fmt-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.0
+      - run: terraform fmt -check -recursive
+
+  validate:
+    runs-on: ubuntu-latest
+    needs: [detect-stacks]
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJson(needs.detect-stacks.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.0
+      - working-directory: ${{ matrix.stack }}
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+  tflint:
+    runs-on: ubuntu-latest
+    needs: [detect-stacks]
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJson(needs.detect-stacks.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+      - run: tflint --init
+      - working-directory: ${{ matrix.stack }}
+        run: tflint
+
+  tfsec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          soft_fail: false
+          working_directory: .
