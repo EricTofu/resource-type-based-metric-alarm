@@ -1,0 +1,34 @@
+service            = "billing"
+alias              = "dev"
+aws_region         = "<PRIMARY_REGION>"
+ops_bucket         = "<ORG>-tfstate"
+ops_state_role_arn = "<OPS_STATE_ROLE_ARN>"
+
+lambda_concurrency_threshold = 900
+
+common_tags = {
+  ManagedBy   = "terraform"
+  Service     = "billing"
+  Environment = "dev"
+}
+
+# Fill each list with resources for this service.
+# Types the service does not use stay as [].
+
+alb_resources = [
+  # {
+  #   name = "billing-alb"
+  #   overrides = {}
+  # }
+]
+
+apigateway_resources = []
+ec2_resources        = []
+asg_resources        = []
+lambda_resources     = []
+rds_resources        = []
+s3_resources         = []
+elasticache_resources = []
+opensearch_resources = []
+ses_resources        = []
+cloudfront_resources = []
