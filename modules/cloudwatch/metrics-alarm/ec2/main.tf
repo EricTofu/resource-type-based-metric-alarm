@@ -13,6 +13,29 @@ locals {
 # Data source to get EC2 instance ID from Name tag
 #------------------------------------------------------------------------------
 
+data "aws_instances" "by_name" {
+  for_each = local.ec2_resources
+
+  filter {
+    name   = "tag:Name"
+    values = [each.value.name]
+  }
+
+  filter {
+    name   = "instance-state-name"
+    values = ["running", "stopped"]
+  }
+}
+
+check "ec2_name_tag_uniqueness" {
+  assert {
+    condition = alltrue([
+      for k, d in data.aws_instances.by_name : length(d.ids) == 1
+    ])
+    error_message = "Every EC2 resource must have exactly one running/stopped instance with a matching Name tag. Check: ${join(", ", [for k, d in data.aws_instances.by_name : "${k}=${length(d.ids)}" if length(d.ids) != 1])}"
+  }
+}
+
 data "aws_instance" "this" {
   for_each = local.ec2_resources
 
@@ -53,20 +76,23 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
     InstanceId = data.aws_instance.this[each.key].id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.status_check
     )]
-  ]
+  ] : []
 
   treat_missing_data = "breaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "EC2"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "EC2"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -95,20 +121,23 @@ resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
     InstanceId = data.aws_instance.this[each.key].id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.status_check_ebs
     )]
-  ]
+  ] : []
 
   treat_missing_data = "breaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "EC2"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "EC2"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -140,20 +169,23 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     InstanceId = data.aws_instance.this[each.key].id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.cpu
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "EC2"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "EC2"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -185,20 +217,23 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
     InstanceId = data.aws_instance.this[each.key].id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.memory
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "EC2"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "EC2"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------

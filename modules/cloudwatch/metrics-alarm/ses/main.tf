@@ -31,18 +31,21 @@ resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
   datapoints_to_alarm = 5
   period              = 60
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.bounce_rate
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "SES"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "SES"
+      ResourceName = each.value.name
+    }
+  )
 }

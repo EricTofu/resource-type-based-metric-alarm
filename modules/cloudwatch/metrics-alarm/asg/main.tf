@@ -35,20 +35,23 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
     AutoScalingGroupName = each.value.name
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.in_service_capacity
     )]
-  ]
+  ] : []
 
   treat_missing_data = "breaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "ASG"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "ASG"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------

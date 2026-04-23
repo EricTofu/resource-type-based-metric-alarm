@@ -36,20 +36,23 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     CacheClusterId = each.value.name
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.cpu
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "ElastiCache"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "ElastiCache"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -81,18 +84,21 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
     CacheClusterId = each.value.name
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.memory
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "ElastiCache"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "ElastiCache"
+      ResourceName = each.value.name
+    }
+  )
 }

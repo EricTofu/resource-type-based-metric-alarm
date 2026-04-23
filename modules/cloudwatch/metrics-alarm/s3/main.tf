@@ -43,20 +43,23 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
     FilterId   = "EntireBucket"
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.error_5xx
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "S3"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "S3"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -86,20 +89,23 @@ resource "aws_cloudwatch_metric_alarm" "replication_failed" {
     RuleId       = "EntireBucket"
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.replication_failed
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "S3"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "S3"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------

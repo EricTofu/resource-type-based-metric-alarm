@@ -39,20 +39,23 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     ClientId   = data.aws_caller_identity.current.account_id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.cpu
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "OpenSearch"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "OpenSearch"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -85,20 +88,23 @@ resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
     ClientId   = data.aws_caller_identity.current.account_id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.jvm_memory
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "OpenSearch"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "OpenSearch"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -131,20 +137,23 @@ resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
     ClientId   = data.aws_caller_identity.current.account_id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.old_gen_jvm
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "OpenSearch"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "OpenSearch"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -177,20 +186,23 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
     ClientId   = data.aws_caller_identity.current.account_id
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.free_storage
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "OpenSearch"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "OpenSearch"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------

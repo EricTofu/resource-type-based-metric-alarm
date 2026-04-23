@@ -37,20 +37,23 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
     FunctionName = each.value.name
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.duration
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "Lambda"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "Lambda"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -76,9 +79,12 @@ resource "aws_cloudwatch_metric_alarm" "concurrency" {
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "Lambda"
-    ResourceName = "Account"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "Lambda"
+      ResourceName = "Account"
+    }
+  )
 }

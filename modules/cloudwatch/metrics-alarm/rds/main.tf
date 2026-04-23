@@ -130,21 +130,24 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
     DBInstanceIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.freeable_memory
     )]
-  ]
+  ] : []
 
   treat_missing_data = "breaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS"
-    ResourceName = each.key
-    ClusterName  = each.value.cluster_name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -176,21 +179,24 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     DBInstanceIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.cpu
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS"
-    ResourceName = each.key
-    ClusterName  = each.value.cluster_name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -215,7 +221,7 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
     try(
       (local.instance_memory_map[data.aws_db_instance.this[each.key].db_instance_class] /
         coalesce(
-          local.engine_max_connections_multiplier[data.aws_db_instance.this[each.key].engine],
+          lookup(local.engine_max_connections_multiplier, data.aws_db_instance.this[each.key].engine, local.default_engine_multiplier),
           local.default_engine_multiplier
       )) * coalesce(try(each.value.overrides.database_connections_threshold_percent, null), var.default_database_connections_threshold_percent) / 100,
       null
@@ -230,21 +236,24 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
     DBInstanceIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.database_connections
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS"
-    ResourceName = each.key
-    ClusterName  = each.value.cluster_name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -276,21 +285,24 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
     DBInstanceIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.free_storage
     )]
-  ]
+  ] : []
 
   treat_missing_data = "breaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS"
-    ResourceName = each.key
-    ClusterName  = each.value.cluster_name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -319,21 +331,24 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
     DBInstanceIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.engine_uptime
     )]
-  ]
+  ] : []
 
   treat_missing_data = "breaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS"
-    ResourceName = each.key
-    ClusterName  = each.value.cluster_name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -365,20 +380,23 @@ resource "aws_cloudwatch_metric_alarm" "volume_bytes_used" {
     DBClusterIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.volume_bytes_used
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS/Aurora"
-    ResourceName = each.key
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS/Aurora"
+      ResourceName = each.key
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -410,21 +428,24 @@ resource "aws_cloudwatch_metric_alarm" "acu_utilization" {
     DBInstanceIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.acu_utilization
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS"
-    ResourceName = each.key
-    ClusterName  = each.value.cluster_name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -456,19 +477,22 @@ resource "aws_cloudwatch_metric_alarm" "serverless_capacity" {
     DBInstanceIdentifier = each.key
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.serverless_capacity
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "RDS"
-    ResourceName = each.key
-    ClusterName  = each.value.cluster_name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
 }

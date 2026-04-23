@@ -35,18 +35,21 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
     ApiName = each.value.name
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.error_5xx
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "APIGateway"
-    ResourceName = each.value.name
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "APIGateway"
+      ResourceName = each.value.name
+    }
+  )
 }

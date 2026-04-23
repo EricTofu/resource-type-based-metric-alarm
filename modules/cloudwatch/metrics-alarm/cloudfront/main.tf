@@ -55,20 +55,23 @@ resource "aws_cloudwatch_metric_alarm" "error_4xx" {
     Region         = "Global"
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.error_4xx
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "CloudFront"
-    ResourceName = coalesce(each.value.name, each.value.distribution_id)
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "CloudFront"
+      ResourceName = coalesce(each.value.name, each.value.distribution_id)
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -101,20 +104,23 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
     Region         = "Global"
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.error_5xx
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "CloudFront"
-    ResourceName = coalesce(each.value.name, each.value.distribution_id)
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "CloudFront"
+      ResourceName = coalesce(each.value.name, each.value.distribution_id)
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -147,20 +153,23 @@ resource "aws_cloudwatch_metric_alarm" "origin_latency" {
     Region         = "Global"
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.origin_latency
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "CloudFront"
-    ResourceName = coalesce(each.value.name, each.value.distribution_id)
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "CloudFront"
+      ResourceName = coalesce(each.value.name, each.value.distribution_id)
+    }
+  )
 }
 
 #------------------------------------------------------------------------------
@@ -193,18 +202,21 @@ resource "aws_cloudwatch_metric_alarm" "cache_hit_rate" {
     Region         = "Global"
   }
 
-  alarm_actions = [
+  alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.cache_hit_rate
     )]
-  ]
+  ] : []
 
   treat_missing_data = "notBreaching"
 
-  tags = {
-    Project      = var.project
-    ResourceType = "CloudFront"
-    ResourceName = coalesce(each.value.name, each.value.distribution_id)
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "CloudFront"
+      ResourceName = coalesce(each.value.name, each.value.distribution_id)
+    }
+  )
 }
