@@ -3,7 +3,7 @@
 #------------------------------------------------------------------------------
 
 module "monitor_alb" {
-  source = "./modules/monitor-alb"
+  source = "./modules/cloudwatch/metrics-alarm/alb"
 
   for_each = { for idx, group in var.alb_resources : "${group.project}" => group }
 
@@ -17,7 +17,7 @@ module "monitor_alb" {
 #------------------------------------------------------------------------------
 
 module "monitor_apigateway" {
-  source = "./modules/monitor-apigateway"
+  source = "./modules/cloudwatch/metrics-alarm/apigateway"
 
   for_each = { for idx, group in var.apigateway_resources : "${group.project}" => group }
 
@@ -31,7 +31,7 @@ module "monitor_apigateway" {
 #------------------------------------------------------------------------------
 
 module "monitor_ec2" {
-  source = "./modules/monitor-ec2"
+  source = "./modules/cloudwatch/metrics-alarm/ec2"
 
   for_each = { for idx, group in var.ec2_resources : "${group.project}" => group }
 
@@ -45,7 +45,7 @@ module "monitor_ec2" {
 #------------------------------------------------------------------------------
 
 module "monitor_asg" {
-  source = "./modules/monitor-asg"
+  source = "./modules/cloudwatch/metrics-alarm/asg"
 
   for_each = { for idx, group in var.asg_resources : "${group.project}" => group }
 
@@ -59,7 +59,7 @@ module "monitor_asg" {
 #------------------------------------------------------------------------------
 
 module "monitor_lambda" {
-  source = "./modules/monitor-lambda"
+  source = "./modules/cloudwatch/metrics-alarm/lambda"
 
   for_each = { for idx, group in var.lambda_resources : "${group.project}" => group }
 
@@ -74,7 +74,7 @@ module "monitor_lambda" {
 #------------------------------------------------------------------------------
 
 module "monitor_rds" {
-  source = "./modules/monitor-rds"
+  source = "./modules/cloudwatch/metrics-alarm/rds"
 
   for_each = { for idx, group in var.rds_resources : "${group.project}" => group }
 
@@ -88,7 +88,7 @@ module "monitor_rds" {
 #------------------------------------------------------------------------------
 
 module "monitor_s3" {
-  source = "./modules/monitor-s3"
+  source = "./modules/cloudwatch/metrics-alarm/s3"
 
   for_each = { for idx, group in var.s3_resources : "${group.project}" => group }
 
@@ -102,7 +102,7 @@ module "monitor_s3" {
 #------------------------------------------------------------------------------
 
 module "monitor_elasticache" {
-  source = "./modules/monitor-elasticache"
+  source = "./modules/cloudwatch/metrics-alarm/elasticache"
 
   for_each = { for idx, group in var.elasticache_resources : "${group.project}" => group }
 
@@ -116,7 +116,7 @@ module "monitor_elasticache" {
 #------------------------------------------------------------------------------
 
 module "monitor_opensearch" {
-  source = "./modules/monitor-opensearch"
+  source = "./modules/cloudwatch/metrics-alarm/opensearch"
 
   for_each = { for idx, group in var.opensearch_resources : "${group.project}" => group }
 
@@ -130,7 +130,7 @@ module "monitor_opensearch" {
 #------------------------------------------------------------------------------
 
 module "monitor_ses" {
-  source = "./modules/monitor-ses"
+  source = "./modules/cloudwatch/metrics-alarm/ses"
 
   for_each = { for idx, group in var.ses_resources : "${group.project}" => group }
 
@@ -144,7 +144,7 @@ module "monitor_ses" {
 #------------------------------------------------------------------------------
 
 module "monitor_cloudfront" {
-  source = "./modules/monitor-cloudfront"
+  source = "./modules/cloudwatch/metrics-alarm/cloudfront"
   providers = {
     aws = aws.us_east_1
   }
