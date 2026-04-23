@@ -6,8 +6,8 @@ variable "project" {
 variable "resources" {
   description = "List of S3 bucket resources to monitor"
   type = list(object({
-    name = string
-    enabled          = optional(bool, true)
+    name    = string
+    enabled = optional(bool, true)
     overrides = optional(object({
       severity            = optional(string)
       description         = optional(string)

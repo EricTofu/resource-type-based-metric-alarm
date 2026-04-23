@@ -32,6 +32,9 @@ override.tf.json
 # HCLEDIT
 .hcledit
 
+# Lock files (each stack manages its own provider pins)
+.terraform.lock.hcl
+
 # Git worktrees
 .worktrees/
 

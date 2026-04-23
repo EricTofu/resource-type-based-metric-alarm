@@ -53,26 +53,3 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
     }
   )
 }
-
-#------------------------------------------------------------------------------
-# Check for ASG metric collection
-#------------------------------------------------------------------------------
-
-resource "null_resource" "check_asg_metrics" {
-  for_each = local.asg_resources
-
-  triggers = {
-    asg_name = each.value.name
-  }
-
-  # Using "aws_region" data source would be better, but we don't have it defined in this module
-  # We can assume the provider's region. But for simplicity in this script, 
-  # we might need to rely on the environment or passed variable.
-  # Let's add a data source for current region to be clean.
-
-  provisioner "local-exec" {
-    command = "${path.module}/../../scripts/check_asg_metrics.sh ${data.aws_region.current.region} ${each.value.name}"
-  }
-}
-
-data "aws_region" "current" {}

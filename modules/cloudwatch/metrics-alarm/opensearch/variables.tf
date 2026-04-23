@@ -6,7 +6,7 @@ variable "project" {
 variable "resources" {
   description = "List of OpenSearch resources to monitor"
   type = list(object({
-    name = string
+    name    = string
     enabled = optional(bool, true)
     overrides = optional(object({
       severity                     = optional(string)

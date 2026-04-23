@@ -7,7 +7,7 @@ variable "resources" {
   description = "List of RDS/Aurora resources to monitor"
   type = list(object({
     name       = string
-    enabled          = optional(bool, true)
+    enabled    = optional(bool, true)
     is_cluster = optional(bool, false)
     serverless = optional(bool, false)
     overrides = optional(object({

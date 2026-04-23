@@ -235,22 +235,3 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
     }
   )
 }
-
-#------------------------------------------------------------------------------
-# Check for mem_used_percent metric
-#------------------------------------------------------------------------------
-
-resource "null_resource" "check_mem_metric" {
-  for_each = local.ec2_resources
-
-  triggers = {
-    instance_id = data.aws_instance.this[each.key].id
-  }
-
-  provisioner "local-exec" {
-    command = "${path.module}/../../scripts/check_ec2_mem_metric.sh ${data.aws_instance.this[each.key].availability_zone} ${data.aws_instance.this[each.key].id}"
-    # Note: availability_zone includes region (e.g. us-east-1a), script needs valid region
-    # We'll extract region from AZ in shell or just use current region
-    # Actually, let's use a data source for region to be safe
-  }
-}

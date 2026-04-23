@@ -107,21 +107,3 @@ resource "aws_cloudwatch_metric_alarm" "replication_failed" {
     }
   )
 }
-
-#------------------------------------------------------------------------------
-# Check for S3 Request Metrics
-#------------------------------------------------------------------------------
-
-resource "null_resource" "check_s3_metrics" {
-  for_each = local.s3_resources
-
-  triggers = {
-    bucket_name = each.value.name
-  }
-
-  provisioner "local-exec" {
-    command = "${path.module}/../../scripts/check_s3_metrics.sh ${data.aws_region.current.region} ${each.value.name}"
-  }
-}
-
-data "aws_region" "current" {}

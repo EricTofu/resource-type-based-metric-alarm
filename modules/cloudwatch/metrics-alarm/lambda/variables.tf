@@ -7,7 +7,7 @@ variable "resources" {
   description = "List of Lambda resources to monitor"
   type = list(object({
     name       = string
-    enabled          = optional(bool, true)
+    enabled    = optional(bool, true)
     timeout_ms = number
     overrides = optional(object({
       severity              = optional(string)

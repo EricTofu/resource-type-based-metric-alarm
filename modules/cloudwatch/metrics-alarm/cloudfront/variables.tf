@@ -7,7 +7,7 @@ variable "resources" {
   description = "List of CloudFront distributions to monitor"
   type = list(object({
     distribution_id = string
-    enabled = optional(bool, true)
+    enabled         = optional(bool, true)
     name            = optional(string) # Friendly name for alarm naming
     overrides = optional(object({
       severity                 = optional(string)
