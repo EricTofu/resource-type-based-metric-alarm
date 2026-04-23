@@ -1,0 +1,20 @@
+alias              = "account-dev"
+aws_region         = "<PRIMARY_REGION>"
+ops_state_bucket   = "<ORG>-tfstate"
+ops_state_role_arn = "<OPS_STATE_ROLE_ARN>"
+sns_choice         = "create"
+
+# sns_choice = "import" — uncomment and fill if adopting existing topics:
+# existing_sns_arns = {
+#   WARN  = "arn:aws:sns:<REGION>:<ACCOUNT_ID>:<TOPIC_NAME>"
+#   ERROR = "arn:aws:sns:<REGION>:<ACCOUNT_ID>:<TOPIC_NAME>"
+#   CRIT  = "arn:aws:sns:<REGION>:<ACCOUNT_ID>:<TOPIC_NAME>"
+# }
+
+common_tags = {
+  Org         = "<ORG>"
+  Environment = "dev"
+  Account     = "account-dev"
+  ManagedBy   = "terraform"
+  Stack       = "platform"
+}
