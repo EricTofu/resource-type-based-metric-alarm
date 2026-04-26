@@ -16,6 +16,7 @@ locals {
   # RAM in Bytes mapping for common RDS classes
   # Fallback to local.instance_memory_map[class] or use the provided byte threshold
   # 1GB = 1073741824 Bytes
+  # Curated subset of common RDS instance classes. Append new classes here as needed; omitted classes fall back to var.default_freeable_memory_threshold (FreeableMemory) or var.default_database_connections_threshold (DatabaseConnections).
   instance_memory_map = {
     "db.t3.micro"   = 1073741824  # 1GB
     "db.t3.small"   = 2147483648  # 2GB

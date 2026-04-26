@@ -142,9 +142,9 @@ variable "default_cpu_threshold" {
 }
 
 variable "default_database_connections_threshold" {
-  description = "Default threshold for DatabaseConnections"
+  description = "Last-resort fallback threshold for DatabaseConnections. Used only when the instance class is not in instance_memory_map and no per-resource override is set. Set explicitly in tfvars for accurate workload-specific values."
   type        = number
-  default     = 2700
+  default     = 1000
 }
 
 variable "default_database_connections_threshold_percent" {
