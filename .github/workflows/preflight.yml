@@ -19,42 +19,45 @@ jobs:
 
       - name: Get changed tfvars files
         id: changed
-        uses: tj-actions/changed-files@v44
+        uses: dorny/paths-filter@v3
         with:
-          files: "stacks/services/**/terraform.tfvars"
+          list-files: shell
+          filters: |
+            tfvars:
+              - 'stacks/services/**/terraform.tfvars'
 
       - name: Configure AWS credentials
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.changed.outputs.tfvars == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.PREFLIGHT_READ_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Run EC2 memory metric check
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.changed.outputs.tfvars == 'true'
         run: |
           FAILED=0
-          for tfvars in ${{ steps.changed.outputs.all_changed_files }}; do
+          for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
             echo "--- Checking EC2 metrics: $tfvars"
             scripts/check_ec2_mem_metric.sh --tfvars "$tfvars" || FAILED=1
           done
           exit $FAILED
 
       - name: Run ASG metric collection check
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.changed.outputs.tfvars == 'true'
         run: |
           FAILED=0
-          for tfvars in ${{ steps.changed.outputs.all_changed_files }}; do
+          for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
             echo "--- Checking ASG metrics: $tfvars"
             scripts/check_asg_metrics.sh --tfvars "$tfvars" || FAILED=1
           done
           exit $FAILED
 
       - name: Run S3 request metrics check
-        if: steps.changed.outputs.any_changed == 'true'
+        if: steps.changed.outputs.tfvars == 'true'
         run: |
           FAILED=0
-          for tfvars in ${{ steps.changed.outputs.all_changed_files }}; do
+          for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
             echo "--- Checking S3 metrics: $tfvars"
             scripts/check_s3_metrics.sh --tfvars "$tfvars" || FAILED=1
           done
