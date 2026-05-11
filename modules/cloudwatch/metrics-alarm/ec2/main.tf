@@ -2,8 +2,8 @@ locals {
   ec2_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
-    status_check     = "ERROR"
-    status_check_ebs = "ERROR"
+    status_check     = "CRIT"
+    status_check_ebs = "CRIT"
     cpu              = "WARN"
     memory           = "WARN"
   }
@@ -83,6 +83,13 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.status_check
+    )]
+  ] : []
+
   treat_missing_data = "breaching"
 
   tags = merge(
@@ -122,6 +129,13 @@ resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.status_check_ebs
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.status_check_ebs
@@ -176,6 +190,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.cpu
+    )]
+  ] : []
+
   treat_missing_data = "notBreaching"
 
   tags = merge(
@@ -218,6 +239,13 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.memory
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.memory

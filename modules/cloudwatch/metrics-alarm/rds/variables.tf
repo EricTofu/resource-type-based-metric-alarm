@@ -20,6 +20,8 @@ variable "resources" {
       database_connections_threshold_percent = optional(number)
       free_storage_threshold                 = optional(number)
       volume_bytes_used_threshold            = optional(number)
+      read_latency_threshold                 = optional(number)
+      write_latency_threshold                = optional(number)
       acu_utilization_threshold              = optional(number)
       serverless_capacity_threshold          = optional(number)
     }), {})
@@ -87,6 +89,20 @@ variable "resources" {
   validation {
     condition = alltrue([
       for r in var.resources :
+      try(r.overrides.read_latency_threshold, null) == null || try(r.overrides.read_latency_threshold, 0) >= 0
+    ])
+    error_message = "overrides.read_latency_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.write_latency_threshold, null) == null || try(r.overrides.write_latency_threshold, 0) >= 0
+    ])
+    error_message = "overrides.write_latency_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
       try(r.overrides.acu_utilization_threshold, null) == null
       || (try(r.overrides.acu_utilization_threshold, 0) >= 0 && try(r.overrides.acu_utilization_threshold, 0) <= 100)
     ])
@@ -138,13 +154,13 @@ variable "default_freeable_memory_threshold_percent" {
 variable "default_cpu_threshold" {
   description = "Default threshold for CPUUtilization"
   type        = number
-  default     = 80
+  default     = 90
 }
 
 variable "default_database_connections_threshold" {
   description = "Last-resort fallback threshold for DatabaseConnections. Used only when the instance class is not in instance_memory_map and no per-resource override is set. Set explicitly in tfvars for accurate workload-specific values."
   type        = number
-  default     = 1000
+  default     = 2700
 }
 
 variable "default_database_connections_threshold_percent" {
@@ -162,7 +178,19 @@ variable "default_free_storage_threshold" {
 variable "default_volume_bytes_used_threshold" {
   description = "Default threshold for VolumeBytesUsed (bytes). Only applicable to Aurora clusters."
   type        = number
-  default     = 107374182400 # 100GB
+  default     = 21474836480 # 20GB
+}
+
+variable "default_read_latency_threshold" {
+  description = "Default threshold for ReadLatency (seconds)"
+  type        = number
+  default     = 0.1
+}
+
+variable "default_write_latency_threshold" {
+  description = "Default threshold for WriteLatency (seconds)"
+  type        = number
+  default     = 0.2
 }
 
 variable "default_acu_utilization_threshold" {

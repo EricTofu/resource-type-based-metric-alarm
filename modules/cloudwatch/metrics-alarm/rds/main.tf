@@ -3,14 +3,16 @@ locals {
   standalone_resources = { for res in var.resources : res.name => res if !res.is_cluster }
 
   default_severities = {
-    freeable_memory      = "ERROR"
-    cpu                  = "ERROR"
-    database_connections = "ERROR"
-    free_storage         = "ERROR"
-    volume_bytes_used    = "ERROR"
+    freeable_memory      = "WARN"
+    cpu                  = "WARN"
+    database_connections = "WARN"
+    free_storage         = "WARN"
+    volume_bytes_used    = "WARN"
     engine_uptime        = "CRIT"
-    acu_utilization      = "ERROR"
-    serverless_capacity  = "ERROR"
+    read_latency         = "WARN"
+    write_latency        = "WARN"
+    acu_utilization      = "WARN"
+    serverless_capacity  = "WARN"
   }
 
   # RAM in Bytes mapping for common RDS classes
@@ -138,6 +140,13 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.freeable_memory
+    )]
+  ] : []
+
   treat_missing_data = "breaching"
 
   tags = merge(
@@ -181,6 +190,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.cpu
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.cpu
@@ -244,6 +260,13 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.database_connections
+    )]
+  ] : []
+
   treat_missing_data = "notBreaching"
 
   tags = merge(
@@ -287,6 +310,13 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.free_storage
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.free_storage
@@ -339,6 +369,124 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.engine_uptime
+    )]
+  ] : []
+
+  treat_missing_data = "breaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "RDS"
+      ResourceName = each.key
+      ClusterName  = each.value.cluster_name
+    }
+  )
+}
+
+# #------------------------------------------------------------------------------
+# # VolumeBytesUsed Alarm — disabled per work-machine tuning
+# #------------------------------------------------------------------------------
+#
+# resource "aws_cloudwatch_metric_alarm" "volume_bytes_used" {
+#   for_each = local.cluster_resources
+#
+#   alarm_name = "${var.project}-RDS-[${each.key}]-VolumeBytesUsed"
+#   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.volume_bytes_used)}]-${coalesce(
+#     try(each.value.overrides.description, null),
+#     "${var.project}-RDS-[${each.key}]-VolumeBytesUsed is in ALARM state"
+#   )}"
+#
+#   namespace           = "AWS/RDS"
+#   metric_name         = "VolumeBytesUsed"
+#   statistic           = "Maximum"
+#   comparison_operator = "GreaterThanThreshold"
+#   threshold = coalesce(
+#     try(each.value.overrides.volume_bytes_used_threshold, null),
+#     var.default_volume_bytes_used_threshold
+#   )
+#   evaluation_periods  = 5
+#   datapoints_to_alarm = 5
+#   period              = 60
+#
+#   dimensions = {
+#     DBClusterIdentifier = each.key
+#   }
+#
+#   alarm_actions = each.value.enabled ? [
+#     var.sns_topic_arns[coalesce(
+#       try(each.value.overrides.severity, null),
+#       local.default_severities.volume_bytes_used
+#     )]
+#   ] : []
+#
+#   ok_actions = each.value.enabled ? [
+#     var.sns_topic_arns[coalesce(
+#       try(each.value.overrides.severity, null),
+#       local.default_severities.volume_bytes_used
+#     )]
+#   ] : []
+#
+#   treat_missing_data = "notBreaching"
+#
+#   tags = merge(
+#     var.common_tags,
+#     {
+#       Project      = var.project
+#       ResourceType = "RDS/Aurora"
+#       ResourceName = each.key
+#     }
+#   )
+# }
+
+#------------------------------------------------------------------------------
+# ReadLatency Alarm (p90)
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "read_latency" {
+  for_each = local.all_instances
+
+  alarm_name = "${var.project}-RDS-[${each.key}]-ReadLatency"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.read_latency)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-RDS-[${each.key}]-ReadLatency is in ALARM state"
+  )}"
+
+  namespace           = "AWS/RDS"
+  metric_name         = "ReadLatency"
+  extended_statistic  = "p90"
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.read_latency_threshold, null),
+    var.default_read_latency_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    DBInstanceIdentifier = each.key
+  }
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.read_latency
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.read_latency
+    )]
+  ] : []
+
   treat_missing_data = "breaching"
 
   tags = merge(
@@ -353,49 +501,57 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
 }
 
 #------------------------------------------------------------------------------
-# VolumeBytesUsed Alarm (Aurora Cluster level)
+# WriteLatency Alarm (p90)
 #------------------------------------------------------------------------------
 
-resource "aws_cloudwatch_metric_alarm" "volume_bytes_used" {
-  for_each = local.cluster_resources
+resource "aws_cloudwatch_metric_alarm" "write_latency" {
+  for_each = local.all_instances
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-VolumeBytesUsed"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.volume_bytes_used)}]-${coalesce(
+  alarm_name = "${var.project}-RDS-[${each.key}]-WriteLatency"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.write_latency)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-VolumeBytesUsed is in ALARM state"
+    "${var.project}-RDS-[${each.key}]-WriteLatency is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
-  metric_name         = "VolumeBytesUsed"
-  statistic           = "Maximum"
+  metric_name         = "WriteLatency"
+  extended_statistic  = "p90"
   comparison_operator = "GreaterThanThreshold"
   threshold = coalesce(
-    try(each.value.overrides.volume_bytes_used_threshold, null),
-    var.default_volume_bytes_used_threshold
+    try(each.value.overrides.write_latency_threshold, null),
+    var.default_write_latency_threshold
   )
   evaluation_periods  = 5
   datapoints_to_alarm = 5
   period              = 60
 
   dimensions = {
-    DBClusterIdentifier = each.key
+    DBInstanceIdentifier = each.key
   }
 
   alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
-      local.default_severities.volume_bytes_used
+      local.default_severities.write_latency
     )]
   ] : []
 
-  treat_missing_data = "notBreaching"
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.write_latency
+    )]
+  ] : []
+
+  treat_missing_data = "breaching"
 
   tags = merge(
     var.common_tags,
     {
       Project      = var.project
-      ResourceType = "RDS/Aurora"
+      ResourceType = "RDS"
       ResourceName = each.key
+      ClusterName  = each.value.cluster_name
     }
   )
 }
@@ -430,6 +586,13 @@ resource "aws_cloudwatch_metric_alarm" "acu_utilization" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.acu_utilization
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.acu_utilization
@@ -479,6 +642,13 @@ resource "aws_cloudwatch_metric_alarm" "serverless_capacity" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.serverless_capacity
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.serverless_capacity

@@ -6,7 +6,8 @@ output "alarm_arns" {
     { for k, v in aws_cloudwatch_metric_alarm.database_connections : "${k}:DatabaseConnections" => v.arn },
     { for k, v in aws_cloudwatch_metric_alarm.free_storage : "${k}:FreeStorageSpace" => v.arn },
     { for k, v in aws_cloudwatch_metric_alarm.engine_uptime : "${k}:EngineUptime" => v.arn },
-    { for k, v in aws_cloudwatch_metric_alarm.volume_bytes_used : "${k}:VolumeBytesUsed" => v.arn },
+    { for k, v in aws_cloudwatch_metric_alarm.read_latency : "${k}:ReadLatency" => v.arn },
+    { for k, v in aws_cloudwatch_metric_alarm.write_latency : "${k}:WriteLatency" => v.arn },
     { for k, v in aws_cloudwatch_metric_alarm.acu_utilization : "${k}:ACUUtilization" => v.arn },
     { for k, v in aws_cloudwatch_metric_alarm.serverless_capacity : "${k}:ServerlessDatabaseCapacity" => v.arn }
   )
@@ -20,7 +21,8 @@ output "alarm_names" {
     { for k, v in aws_cloudwatch_metric_alarm.database_connections : "${k}:DatabaseConnections" => v.alarm_name },
     { for k, v in aws_cloudwatch_metric_alarm.free_storage : "${k}:FreeStorageSpace" => v.alarm_name },
     { for k, v in aws_cloudwatch_metric_alarm.engine_uptime : "${k}:EngineUptime" => v.alarm_name },
-    { for k, v in aws_cloudwatch_metric_alarm.volume_bytes_used : "${k}:VolumeBytesUsed" => v.alarm_name },
+    { for k, v in aws_cloudwatch_metric_alarm.read_latency : "${k}:ReadLatency" => v.alarm_name },
+    { for k, v in aws_cloudwatch_metric_alarm.write_latency : "${k}:WriteLatency" => v.alarm_name },
     { for k, v in aws_cloudwatch_metric_alarm.acu_utilization : "${k}:ACUUtilization" => v.alarm_name },
     { for k, v in aws_cloudwatch_metric_alarm.serverless_capacity : "${k}:ServerlessDatabaseCapacity" => v.alarm_name }
   )

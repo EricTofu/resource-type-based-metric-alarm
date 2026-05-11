@@ -38,6 +38,13 @@ resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.bounce_rate
+    )]
+  ] : []
+
   treat_missing_data = "notBreaching"
 
   tags = merge(

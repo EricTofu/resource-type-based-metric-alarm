@@ -44,6 +44,13 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.duration
+    )]
+  ] : []
+
   treat_missing_data = "notBreaching"
 
   tags = merge(
@@ -76,6 +83,7 @@ resource "aws_cloudwatch_metric_alarm" "concurrency" {
   period              = 60
 
   alarm_actions = [var.sns_topic_arns[local.default_severities.concurrency]]
+  ok_actions    = [var.sns_topic_arns[local.default_severities.concurrency]]
 
   treat_missing_data = "notBreaching"
 

@@ -43,6 +43,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.cpu
+    )]
+  ] : []
+
   treat_missing_data = "notBreaching"
 
   tags = merge(
@@ -85,6 +92,13 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.memory
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.memory

@@ -46,6 +46,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.cpu
+    )]
+  ] : []
+
   treat_missing_data = "notBreaching"
 
   tags = merge(
@@ -89,6 +96,13 @@ resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.jvm_memory
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.jvm_memory
@@ -144,6 +158,13 @@ resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
     )]
   ] : []
 
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.old_gen_jvm
+    )]
+  ] : []
+
   treat_missing_data = "notBreaching"
 
   tags = merge(
@@ -187,6 +208,13 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
   }
 
   alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.free_storage
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.free_storage
