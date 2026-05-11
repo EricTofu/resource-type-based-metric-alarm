@@ -67,6 +67,7 @@ locals {
     for cluster_name, cluster_data in data.aws_rds_cluster.this : [
       for member in cluster_data.cluster_members : {
         name         = member
+        enabled      = local.cluster_resources[cluster_name].enabled
         overrides    = local.cluster_resources[cluster_name].overrides
         is_cluster   = true
         serverless   = local.cluster_resources[cluster_name].serverless
@@ -79,6 +80,7 @@ locals {
   all_instances_list = concat(
     [for k, v in local.standalone_resources : {
       name         = v.name
+      enabled      = v.enabled
       overrides    = v.overrides
       is_cluster   = false
       serverless   = v.serverless

@@ -26,40 +26,31 @@ For each stack you want to bring up.
 
 **Files:** `<STACK>/bootstrap_override.tf` (new — gitignored)
 
-- [ ] **Step 1: Add the file to `.gitignore`** so it never lands on origin.
+- [ ] **Step 1: Add the file to the per-stack `.gitignore`** so it never lands on origin.
 
 ```bash
 echo "bootstrap_override.tf" >> "<STACK>/.gitignore"
 ```
 
+This appends to (or creates) `<STACK>/.gitignore`, not the repo-root one.
+
 - [ ] **Step 2: Create `<STACK>/bootstrap_override.tf`**
 
-Override the `terraform { backend "s3" {} }` and `provider "aws"` blocks declared elsewhere in the stack. Terraform's `*_override.tf` mechanism replaces matching blocks at parse time without touching the original sources.
+This replaces the stack's `terraform { backend "s3" {} }` (an override's `backend "local" {}` block fully supplants the s3 backend since it has no nested attributes to merge).
 
 ```hcl
 terraform {
   backend "local" {}
 }
-
-provider "aws" {
-  region  = var.aws_region
-  profile = "<AWS_PROFILE>"
-}
-
-provider "aws" {
-  alias   = "us_east_1"
-  region  = "us-east-1"
-  profile = "<AWS_PROFILE>"
-}
 ```
 
-> If the stack's `variables.tf` doesn't declare `aws_profile`, you can either inline the profile literally (as above) or add a `variable "aws_profile" {}` block. Inlining is simpler for a temporary override.
+> ⚠ **Override-file caveat:** Terraform's `*_override.tf` merges nested blocks from the original rather than replacing whole resources. The original `providers.tf` has `provider "aws" { ... assume_role { role_arn = local.tf_deployer_role_arn } }`. An override `provider "aws"` block that adds `profile` would NOT remove the inner `assume_role` block — terraform would still attempt to assume the role. For that reason the provider change is a direct edit, not an override (see Task 1.2 step 1c below).
 
-### Task 1.2: Stub the `terraform_remote_state` references
+### Task 1.2: Direct edits to `providers.tf` and `data.tf`
 
-The override file can't replace `data` blocks cleanly. Edit `data.tf` directly — these are temporary edits you'll revert in Stage 3.
+These edits are temporary — you'll revert them in Stage 3 via `git checkout`.
 
-- [ ] **Step 1a (platform stack only):** comment out the `data "terraform_remote_state" "foundation"` block and the `locals { tf_deployer_role_arn = ... }` that consumes it. The provider override in Task 1.2 already dropped `assume_role`, so the role lookup is dead anyway.
+- [ ] **Step 1a (platform stack only):** comment out the `data "terraform_remote_state" "foundation"` block and the `locals { tf_deployer_role_arn = ... }` that consumes it.
 
 - [ ] **Step 1b (service stack only):** comment out the `data "terraform_remote_state" "platform"` block. Replace the `locals { sns_topic_arns = ... }` with hardcoded values:
 
@@ -75,7 +66,22 @@ locals {
 }
 ```
 
-Then update `providers.tf` to remove `assume_role` (or rely on the override — confirm by checking which provider block wins).
+- [ ] **Step 1c (both):** edit `providers.tf` and remove the entire `assume_role { ... }` block from each `provider "aws"` declaration (both the default and the `us_east_1` alias). Replace it with a `profile = "<AWS_PROFILE>"` attribute. Example:
+
+```hcl
+provider "aws" {
+  region  = var.aws_region
+  profile = "<AWS_PROFILE>"
+  # assume_role { role_arn = local.tf_deployer_role_arn }   # REMOVED for bootstrap
+}
+
+provider "aws" {
+  alias   = "us_east_1"
+  region  = "us-east-1"
+  profile = "<AWS_PROFILE>"
+  # assume_role { role_arn = local.tf_deployer_role_arn }   # REMOVED for bootstrap
+}
+```
 
 ### Task 1.3: Apply
 
@@ -170,9 +176,10 @@ If migration plan shows unacceptable churn:
 
 ```bash
 cd "<STACK>"
-git checkout -- data.tf providers.tf bootstrap_override.tf
-# revive bootstrap_override.tf if you deleted it
-terraform init -backend-config=backend.hcl -migrate-state -force-copy=false   # don't migrate
+# Restore bootstrap state if you already deleted it
+git checkout HEAD -- data.tf providers.tf
+# Recreate bootstrap_override.tf per Task 1.1 step 2
+terraform init -reconfigure            # re-points at local backend, no migration
 ```
 
 Or simpler: destroy and redeploy via foundation-aware path from a clean state, since this is staging.
