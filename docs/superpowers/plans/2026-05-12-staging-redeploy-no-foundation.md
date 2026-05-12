@@ -128,8 +128,8 @@ Replace the placeholder list with your actual projects from Task 1.1. Skip `bill
 ```bash
 cd <work>
 for project in <project-1> <project-2> <project-3>; do
-  echo "=== scaffolding $svc/dev ==="
-  bash scripts/migrate/scaffold-leaf.sh "$svc" dev
+  echo "=== scaffolding $project/dev ==="
+  bash scripts/migrate/scaffold-leaf.sh "$project" dev
 done
 ```
 
@@ -207,7 +207,6 @@ The scaffold pre-fills:
 ```hcl
 common_tags = {
   ManagedBy   = "terraform"
-  Service     = "<project>"
   Environment = "dev"
 }
 ```
@@ -387,7 +386,6 @@ Comment out the `data "terraform_remote_state" "platform" { ... }` block, then r
 
 ```hcl
 locals {
-  project = var.project
   sns_topic_arns = {
     WARN  = "<paste warn ARN from Task 2.1 Step 8>"
     ERROR = "<paste error ARN>"
@@ -477,10 +475,10 @@ Copy your `bootstrap_override.tf` from the pilot to each remaining project's dir
 
 ```bash
 for project in <remaining-project-1> <remaining-project-2> ...; do
-  cd <work>/stacks/projects/$svc/dev
+  cd <work>/stacks/projects/$project/dev
   echo "bootstrap_override.tf" >> .gitignore
   cp ../../<pilot>/dev/bootstrap_override.tf .
-  echo "=== copied override to $svc/dev ==="
+  echo "=== copied override to $project/dev ==="
 done
 ```
 

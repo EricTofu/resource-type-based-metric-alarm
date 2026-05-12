@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Emits import.tf (for the new leaf) and removed.tf (for the old root),
-# based on the old root's current state and the caller-supplied service name.
+# based on the old root's current state and the caller-supplied project name.
+# (Internal variables are still spelled SERVICE for backward-compat; the
+# positional arg is the project name. This script is a one-time M2 helper.)
 #
-# Usage: scripts/migrate/generate-split.sh <service> <leaf-dir>
-# Example: scripts/migrate/generate-split.sh billing stacks/services/billing/dev
+# Usage: scripts/migrate/generate-split.sh <project> <leaf-dir>
+# Example: scripts/migrate/generate-split.sh billing stacks/projects/billing/dev
 #
 # Prerequisites:
 #   - Run from the repo root (the directory containing the old root's main.tf).
