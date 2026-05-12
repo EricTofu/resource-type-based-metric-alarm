@@ -1,5 +1,5 @@
-variable "alias" {
-  description = "Account alias this stack targets (e.g., account-dev)."
+variable "env" {
+  description = "Environment / account tier this stack targets (e.g., dev)."
   type        = string
 }
 

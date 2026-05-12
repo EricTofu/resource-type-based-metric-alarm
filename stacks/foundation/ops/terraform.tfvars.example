@@ -4,7 +4,7 @@
 # <OPS_BOOTSTRAP_PROFILE>  — AWS CLI profile with Ops admin access
 # <OPS_ACCOUNT_ID>         — 12-digit Ops account ID
 # <CALLER_PRINCIPAL_ARN>   — ARN of the human/CI identity running Terraform
-# <ACCOUNT_ID_*>           — 12-digit account ID per alias
+# <ACCOUNT_ID_*>           — 12-digit account ID per env
 # <TF_DEPLOYER_ROLE_ARN_*> — ARN of tf-deployer role in each target account
 
 aws_region           = "<PRIMARY_REGION>"
@@ -13,15 +13,15 @@ ops_account_id       = "<OPS_ACCOUNT_ID>"
 caller_principal_arn = "<CALLER_PRINCIPAL_ARN>"
 
 accounts = {
-  "account-dev" = {
+  "dev" = {
     id                   = "<ACCOUNT_ID_dev>"
     tf_deployer_role_arn = "<TF_DEPLOYER_ROLE_ARN_dev>"
   }
-  "account-stg" = {
+  "stg" = {
     id                   = "<ACCOUNT_ID_stg>"
     tf_deployer_role_arn = "<TF_DEPLOYER_ROLE_ARN_stg>"
   }
-  "account-prod" = {
+  "prod" = {
     id                   = "<ACCOUNT_ID_prod>"
     tf_deployer_role_arn = "<TF_DEPLOYER_ROLE_ARN_prod>"
   }

@@ -21,3 +21,8 @@ output "sns_topic_arns_global" {
   description = "us-east-1 SNS topic ARNs by severity — consumed by CloudFront alarms."
   value       = local.sns_topic_arns_global
 }
+
+output "accounts" {
+  description = "Pass-through of foundation's accounts map; project stacks read this to derive tf_deployer_role_arn."
+  value       = data.terraform_remote_state.foundation.outputs.accounts
+}

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** this plan is designed for **manual execution on a work machine without AI assistance**. Read it as a runbook and tick boxes by hand.
 
-**Goal:** Deploy `stacks/platform/<env>/` and `stacks/services/<svc>/<env>/` against real AWS *before* `stacks/foundation/ops/` is in place. Later, when foundation is ready, migrate each stack's state into the central S3 backend without churning AWS resources.
+**Goal:** Deploy `stacks/platform/<env>/` and `stacks/projects/<project>/<env>/` against real AWS *before* `stacks/foundation/ops/` is in place. Later, when foundation is ready, migrate each stack's state into the central S3 backend without churning AWS resources.
 
 **Why this is needed:** the per-stack `data "terraform_remote_state"` blocks and `assume_role` providers expect foundation outputs (state bucket, KMS alias, `tf_deployer_role_arn`, SNS ARNs). If you don't have those yet, you can't `terraform init` the stacks as written. This runbook substitutes local backend + a profile-based provider + hardcoded values for the foundation outputs, and tells you how to undo the substitutions later.
 
@@ -12,7 +12,7 @@
 
 | Placeholder | Meaning |
 |---|---|
-| `<STACK>` | Path to a stack directory, e.g. `stacks/platform/dev` or `stacks/services/billing/dev` |
+| `<STACK>` | Path to a stack directory, e.g. `stacks/platform/dev` or `stacks/projects/billing/dev` |
 | `<AWS_PROFILE>` | AWS CLI profile that has admin access to the staging account |
 | `<SNS_WARN_ARN>` / `<SNS_ERROR_ARN>` / `<SNS_CRIT_ARN>` | Real SNS topic ARNs in the staging account (one per severity) |
 
@@ -52,11 +52,10 @@ These edits are temporary — you'll revert them in Stage 3 via `git checkout`.
 
 - [ ] **Step 1a (platform stack only):** comment out the `data "terraform_remote_state" "foundation"` block and the `locals { tf_deployer_role_arn = ... }` that consumes it.
 
-- [ ] **Step 1b (service stack only):** comment out the `data "terraform_remote_state" "platform"` block. Replace the `locals { sns_topic_arns = ... }` with hardcoded values:
+- [ ] **Step 1b (project stack only):** comment out the `data "terraform_remote_state" "platform"` block. Replace the `locals { sns_topic_arns = ... }` with hardcoded values:
 
 ```hcl
 locals {
-  project = var.service
   sns_topic_arns = {
     WARN  = "<SNS_WARN_ARN>"
     ERROR = "<SNS_ERROR_ARN>"
@@ -110,7 +109,7 @@ This is the standard foundation deployment — itself bootstrap-able with the sa
 
 - [ ] Deploy `stacks/foundation/ops/` (creates the central state bucket, KMS key, IAM roles). If it itself needs a temporary local backend (chicken-and-egg on its own state bucket), follow Stage 1 for it, then `terraform init -migrate-state -backend-config=backend.hcl` to move its state into the bucket it just created.
 
-- [ ] Verify `foundation/ops` outputs contain the values the platform stack needs (`accounts` map with `tf_deployer_role_arn` per alias).
+- [ ] Verify `foundation/ops` outputs contain the values the platform stack needs (`accounts` map with `tf_deployer_role_arn` per env).
 
 - [ ] Deploy `stacks/platform/<env>/` *properly* (no override) — this is a fresh apply that creates the per-tier SNS topics in the central state bucket. Its state lives in the Ops bucket from this point on.
 
@@ -118,7 +117,7 @@ This is the standard foundation deployment — itself bootstrap-able with the sa
 
 ---
 
-## Stage 3: Migrate each previously-bootstrap-deployed service stack
+## Stage 3: Migrate each previously-bootstrap-deployed project stack
 
 For each `<STACK>` that was bootstrapped in Stage 1.
 

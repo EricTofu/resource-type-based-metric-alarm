@@ -1,10 +1,10 @@
-variable "service" {
-  description = "Service name (e.g., 'billing'). Injected as project into every module call."
+variable "project" {
+  description = "Project name (e.g., 'billing'). Used as the Project tag value and the alarm-name prefix."
   type        = string
 }
 
-variable "alias" {
-  description = "Account alias (e.g., 'dev', 'stg', 'prod')."
+variable "env" {
+  description = "Environment / account tier (e.g., 'dev', 'stg', 'prod')."
   type        = string
 }
 
@@ -36,7 +36,7 @@ variable "lambda_concurrency_threshold" {
 }
 
 #------------------------------------------------------------------------------
-# Resource lists — no project field; the stack injects project = var.service.
+# Resource lists — no project field; the stack injects project = var.project.
 # Override field names must exactly match the library module's resources type.
 #------------------------------------------------------------------------------
 

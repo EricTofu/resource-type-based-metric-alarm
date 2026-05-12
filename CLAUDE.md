@@ -22,16 +22,16 @@ terraform init -backend=false && terraform validate
 This project creates CloudWatch metric alarms for 11 AWS resource types using a modular, DRY pattern split across three layers:
 
 1. **Library modules** (`modules/cloudwatch/metrics-alarm/<type>/`) — reusable alarm definitions, no state
-2. **Platform stacks** (`stacks/platform/<alias>/`) — SNS topics per account, state in Ops bucket
-3. **Service stacks** (`stacks/services/<service>/<alias>/`) — call library modules, read SNS ARNs from platform via `terraform_remote_state`
+2. **Platform stacks** (`stacks/platform/<env>/`) — SNS topics per account, state in Ops bucket
+3. **Project stacks** (`stacks/projects/<project>/<env>/`) — call library modules, read SNS ARNs and the foundation `accounts` map from platform via `terraform_remote_state`
 
 ### Data Flow (legacy monolithic root — pre-M4)
 
 `variables.tf` (root) defines typed resource lists → `main.tf` instantiates per-module `for_each` loops keyed by project → each `modules/cloudwatch/metrics-alarm/<type>/` creates alarms for every resource in the list.
 
-### Data Flow (per-service stacks — post-M2)
+### Data Flow (per-project stacks — post-M2)
 
-`stacks/services/<service>/<alias>/terraform.tfvars` → `main.tf` calls library modules directly with `count = length(var.<type>_resources) > 0 ? 1 : 0` → SNS ARNs come from `data.terraform_remote_state.platform.outputs.sns_topic_arns`.
+`stacks/projects/<project>/<env>/terraform.tfvars` → `main.tf` calls library modules directly with `count = length(var.<type>_resources) > 0 ? 1 : 0` → SNS ARNs come from `data.terraform_remote_state.platform.outputs.sns_topic_arns`.
 
 ### Module Pattern
 
@@ -61,13 +61,13 @@ Three severity levels (WARN / ERROR / CRIT) map to distinct SNS topic ARNs via `
 
 ### Preflight Checks
 
-`scripts/check_ec2_mem_metric.sh`, `scripts/check_asg_metrics.sh`, and `scripts/check_s3_metrics.sh` verify that prerequisite CloudWatch metrics exist before alarms are applied. They accept `--tfvars <path>` and are invoked by `.github/workflows/preflight.yml` on PRs that touch `stacks/services/**/terraform.tfvars`. Requires `PREFLIGHT_READ_ROLE_ARN` GitHub secret (read-only CloudWatch/EC2/S3 IAM role).
+`scripts/check_ec2_mem_metric.sh`, `scripts/check_asg_metrics.sh`, and `scripts/check_s3_metrics.sh` verify that prerequisite CloudWatch metrics exist before alarms are applied. They accept `--tfvars <path>` and are invoked by `.github/workflows/preflight.yml` on PRs that touch `stacks/projects/**/terraform.tfvars`. Requires `PREFLIGHT_READ_ROLE_ARN` GitHub secret (read-only CloudWatch/EC2/S3 IAM role).
 
-To run locally: `scripts/check_ec2_mem_metric.sh --tfvars stacks/services/<svc>/<alias>/terraform.tfvars`
+To run locally: `scripts/check_ec2_mem_metric.sh --tfvars stacks/projects/<project>/<env>/terraform.tfvars`
 
 ### Adding a New Resource Type
 
 1. Create `modules/cloudwatch/metrics-alarm/<type>/variables.tf` and `modules/cloudwatch/metrics-alarm/<type>/main.tf` following the existing module pattern.
 2. Add `outputs.tf` exporting `alarm_arns` and `alarm_names`.
-3. Add the resource list variable to root `variables.tf` (legacy root) and any service stack `variables.tf` that needs it.
+3. Add the resource list variable to root `variables.tf` (legacy root) and any project stack `variables.tf` that needs it.
 4. Add a `module "monitor_<type>"` block to root `main.tf` with a `for_each` keyed by `group.project`.

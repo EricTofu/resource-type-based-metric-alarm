@@ -3,7 +3,7 @@
 # configuration enabled. Exits 1 if any bucket is missing the configuration.
 #
 # Usage: check_s3_metrics.sh --tfvars <path>
-# Example: check_s3_metrics.sh --tfvars stacks/services/billing/dev/terraform.tfvars
+# Example: check_s3_metrics.sh --tfvars stacks/projects/billing/dev/terraform.tfvars
 
 set -euo pipefail
 

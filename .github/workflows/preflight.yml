@@ -3,7 +3,7 @@ name: Preflight Metric Checks
 on:
   pull_request:
     paths:
-      - "stacks/services/**/terraform.tfvars"
+      - "stacks/projects/**/terraform.tfvars"
 
 permissions:
   id-token: write
@@ -24,7 +24,7 @@ jobs:
           list-files: shell
           filters: |
             tfvars:
-              - 'stacks/services/**/terraform.tfvars'
+              - 'stacks/projects/**/terraform.tfvars'
 
       - name: Configure AWS credentials
         if: steps.changed.outputs.tfvars == 'true'

@@ -1,6 +1,6 @@
 # Fill placeholders before running terraform init -backend-config=backend.hcl
 bucket       = "<ORG>-tfstate"
-key          = "account-dev/services/billing/alarms.tfstate"
+key          = "dev/projects/billing/alarms.tfstate"
 region       = "<PRIMARY_REGION>"
 encrypt      = true
 kms_key_id   = "alias/tfstate"

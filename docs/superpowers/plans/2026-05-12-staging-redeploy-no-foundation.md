@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: this plan is designed for **manual execution on the work machine without AI assistance**. The "subagent-driven" / "inline executing-plans" workflows do not apply — read it as a runbook and tick boxes by hand. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Redeploy the CloudWatch-alarm staging environment from a fresh `work` repo into the refactored per-service-stack layout, without first deploying the `foundation/ops` stack. Use local terraform state during this phase; foundation + state migration happens later. Finish by tidying the local `synced` clone and (optionally) the public `origin` repo.
+**Goal:** Redeploy the CloudWatch-alarm staging environment from a fresh `work` repo into the refactored per-project-stack layout, without first deploying the `foundation/ops` stack. Use local terraform state during this phase; foundation + state migration happens later. Finish by tidying the local `synced` clone and (optionally) the public `origin` repo.
 
 **Architecture:** Three repos exist on the work machine:
 - **work** — freshly re-init'd local deployment repo; carries `modules/cloudwatch/metrics-alarm/`, `stacks/`, `scripts/`, gitignored `terraform.tfvars` and `terraform.tfstate*`. No AI-authored docs; standalone git history.
@@ -24,7 +24,7 @@ Deployment uses Terraform's `*_override.tf` mechanism plus direct edits to `prov
 | `<profile>` | AWS CLI profile with admin on the staging account | `staging-admin` |
 | `<region>` | Primary AWS region | `ap-northeast-1` |
 | `<org>` | Org slug used in state bucket naming and tags | `acme` |
-| `<service>` | A service name extracted from the snapshot in Stage 1 | `billing` |
+| `<project>` | A project name extracted from the snapshot in Stage 1 | `billing` |
 
 ---
 
@@ -83,19 +83,19 @@ Expected: returns the staging account ID under the profile you'll use; alarm cou
 export ORG="<org>"
 export PRIMARY_REGION="<region>"
 export OPS_STATE_ROLE_ARN="arn:aws:iam::000000000000:role/tf-state-access"   # placeholder OK in bootstrap mode
-export PILOT_SERVICE="billing"
-export PILOT_ALIAS="dev"
+export PILOT_PROJECT="billing"
+export PILOT_ENV="dev"
 ```
 
-Expected: `echo "$ORG $PRIMARY_REGION $OPS_STATE_ROLE_ARN $PILOT_SERVICE $PILOT_ALIAS"` prints all five.
+Expected: `echo "$ORG $PRIMARY_REGION $OPS_STATE_ROLE_ARN $PILOT_PROJECT $PILOT_ENV"` prints all five.
 
 The `OPS_STATE_ROLE_ARN` is written into each new stack's `backend.hcl` and `terraform.tfvars`, but in bootstrap mode the override replaces the backend and the value is unused at apply time. Putting a placeholder is fine; if you already know the future Ops account ID, use the real value so flipping to foundation later is one edit fewer.
 
 ---
 
-## Stage 1: Extract services + scaffold per-service stacks
+## Stage 1: Extract projects + scaffold per-project stacks
 
-### Task 1.1: Enumerate services from the snapshot
+### Task 1.1: Enumerate projects from the snapshot
 
 **Files:** none (read-only)
 
@@ -106,95 +106,95 @@ grep -oE 'project[[:space:]]*=[[:space:]]*"[^"]+"' <snapshot> \
   | awk -F'"' '{print $2}' | sort -u
 ```
 
-Expected: a newline-separated list of service names (whatever `project = "..."` values appeared in the old monolithic tfvars). Save this list — you'll iterate over it in Task 1.2.
+Expected: a newline-separated list of project names (whatever `project = "..."` values appeared in the old monolithic tfvars). Save this list — you'll iterate over it in Task 1.2.
 
 - [ ] **Step 2: Decide whether `billing` is in the list and how to handle it**
 
-If `billing` appears, the existing `stacks/services/billing/dev/` from origin's M2 pilot will collide with `scaffold-leaf.sh` (which refuses to overwrite). Two choices:
+If `billing` appears, the existing `stacks/projects/billing/dev/` from origin's M2 pilot will collide with `scaffold-leaf.sh` (which refuses to overwrite). Two choices:
 
 - **Keep origin's billing/dev scaffold** and fill its tfvars in Task 1.3 (skip billing in Task 1.2's loop).
-- **Re-scaffold from your template** to ensure every service has identical shape: `rm -rf stacks/services/billing/dev/` and include billing in the Task 1.2 loop.
+- **Re-scaffold from your template** to ensure every project has identical shape: `rm -rf stacks/projects/billing/dev/` and include billing in the Task 1.2 loop.
 
 Choose one. The first is simpler and the difference is cosmetic.
 
-### Task 1.2: Run `scaffold-leaf.sh` for each service
+### Task 1.2: Run `scaffold-leaf.sh` for each project
 
-**Files:** new `stacks/services/<service>/dev/` directories
+**Files:** new `stacks/projects/<project>/dev/` directories
 
-- [ ] **Step 1: Loop over the service list**
+- [ ] **Step 1: Loop over the project list**
 
-Replace the placeholder list with your actual services from Task 1.1. Skip `billing` if you chose "keep origin's scaffold":
+Replace the placeholder list with your actual projects from Task 1.1. Skip `billing` if you chose "keep origin's scaffold":
 
 ```bash
 cd <work>
-for svc in <svc-1> <svc-2> <svc-3>; do
+for project in <project-1> <project-2> <project-3>; do
   echo "=== scaffolding $svc/dev ==="
   bash scripts/migrate/scaffold-leaf.sh "$svc" dev
 done
 ```
 
-Expected: one line per service, "Scaffolded stacks/services/<svc>/dev". No errors.
+Expected: one line per project, "Scaffolded stacks/projects/<project>/dev". No errors.
 
 - [ ] **Step 2: Verify each scaffold has the right files**
 
 ```bash
-for dir in stacks/services/*/dev; do
+for dir in stacks/projects/*/dev; do
   echo "=== $dir ==="
   ls "$dir"
 done
 ```
 
-Expected: each `stacks/services/<svc>/dev/` contains `backend.hcl`, `data.tf`, `.gitignore`, `main.tf`, `outputs.tf`, `providers.tf`, `terraform.tfvars`, `variables.tf`, `versions.tf`.
+Expected: each `stacks/projects/<project>/dev/` contains `backend.hcl`, `data.tf`, `.gitignore`, `main.tf`, `outputs.tf`, `providers.tf`, `terraform.tfvars`, `variables.tf`, `versions.tf`.
 
 - [ ] **Step 3: Commit the scaffolds (working state, even before tfvars are filled)**
 
 ```bash
 cd <work>
-git add stacks/services/
-git commit -m "scaffold per-service stacks (staging/dev)"
+git add stacks/projects/
+git commit -m "scaffold per-project stacks (staging/dev)"
 ```
 
-### Task 1.3: Fill each service's `terraform.tfvars`
+### Task 1.3: Fill each project's `terraform.tfvars`
 
-**Files:** `stacks/services/<service>/dev/terraform.tfvars` (one per service)
+**Files:** `stacks/projects/<project>/dev/terraform.tfvars` (one per project)
 
-Repeat the steps below **once per service**.
+Repeat the steps below **once per project**.
 
-- [ ] **Step 1: Locate the service's entries in the snapshot**
+- [ ] **Step 1: Locate the project's entries in the snapshot**
 
 ```bash
-grep -n 'project[[:space:]]*=[[:space:]]*"<service>"' <snapshot>
+grep -n 'project[[:space:]]*=[[:space:]]*"<project>"' <snapshot>
 ```
 
-Expected: line numbers where `project = "<service>"` appears. Each appearance is inside a resource-type list (`alb_resources = [...]`, `lambda_resources = [...]`, etc.). Open the snapshot in an editor and identify the surrounding `resources = [...]` array for each occurrence.
+Expected: line numbers where `project = "<project>"` appears. Each appearance is inside a resource-type list (`alb_resources = [...]`, `lambda_resources = [...]`, etc.). Open the snapshot in an editor and identify the surrounding `resources = [...]` array for each occurrence.
 
 - [ ] **Step 2: Open the new tfvars file and the snapshot side-by-side**
 
 ```bash
-$EDITOR <work>/stacks/services/<service>/dev/terraform.tfvars <snapshot>
+$EDITOR <work>/stacks/projects/<project>/dev/terraform.tfvars <snapshot>
 ```
 
 - [ ] **Step 3: For each `<type>_resources` in the new file, paste the matching resources from the snapshot**
 
 The schema differs slightly between layouts:
 
-| Old (monolithic) | New (per-service stack) |
+| Old (monolithic) | New (per-project stack) |
 |---|---|
-| `{ project = "<service>", resources = [{ name = "x", overrides = {...} }, ...] }` | `[{ name = "x", overrides = {...} }, ...]` |
+| `{ project = "<project>", resources = [{ name = "x", overrides = {...} }, ...] }` | `[{ name = "x", overrides = {...} }, ...]` |
 
 So strip the outer `{ project = "...", resources = ... }` wrapper and paste only the inner resource list.
 
 **Watch for these conversions:**
-- `is_serverless = true` (old/work) → `serverless = true` (new). The library module is named `serverless`; the per-service-stack `rds_resources` schema uses `serverless` too.
+- `is_serverless = true` (old/work) → `serverless = true` (new). The library module is named `serverless`; the per-project-stack `rds_resources` schema uses `serverless` too.
 - `lambda_concurrency_threshold` lives at the top of the tfvars (not inside `lambda_resources`); copy if present in the snapshot.
 - `cloudfront_resources` keys on `distribution_id`, not `name`. If the snapshot had a `name` field, drop it (or keep it — the override schema allows arbitrary extras to be ignored).
 
 - [ ] **Step 4: If you need per-resource `read_latency_threshold` or `write_latency_threshold` for RDS**
 
-The library module (`modules/cloudwatch/metrics-alarm/rds/variables.tf`) accepts these as override fields, but `stacks/services/<service>/dev/variables.tf` does not yet declare them. To enable per-resource control, edit the stack's `rds_resources` override schema:
+The library module (`modules/cloudwatch/metrics-alarm/rds/variables.tf`) accepts these as override fields, but `stacks/projects/<project>/dev/variables.tf` does not yet declare them. To enable per-resource control, edit the stack's `rds_resources` override schema:
 
 ```hcl
-# In stacks/services/<service>/dev/variables.tf, inside variable "rds_resources" overrides:
+# In stacks/projects/<project>/dev/variables.tf, inside variable "rds_resources" overrides:
       read_latency_threshold                 = optional(number)
       write_latency_threshold                = optional(number)
 ```
@@ -207,7 +207,7 @@ The scaffold pre-fills:
 ```hcl
 common_tags = {
   ManagedBy   = "terraform"
-  Service     = "<service>"
+  Service     = "<project>"
   Environment = "dev"
 }
 ```
@@ -215,23 +215,23 @@ Add any work-org-specific tag keys (e.g., `Owner`, `CostCenter`) as needed.
 
 - [ ] **Step 6: Validate-by-eye that all resource lists are accounted for**
 
-For each `<type>_resources = []` in the new file, ask: did the snapshot have entries for this type under `project = "<service>"`? If yes and the new file shows `[]`, you forgot to copy. If no, leaving `[]` is correct.
+For each `<type>_resources = []` in the new file, ask: did the snapshot have entries for this type under `project = "<project>"`? If yes and the new file shows `[]`, you forgot to copy. If no, leaving `[]` is correct.
 
-- [ ] **Step 7: After filling all services, commit**
+- [ ] **Step 7: After filling all projects, commit**
 
 ```bash
 cd <work>
-git add stacks/services/*/dev/terraform.tfvars
-# Plus any variables.tf edits if you did Step 4 for any service:
-git add stacks/services/*/dev/variables.tf 2>/dev/null
-git commit -m "fill per-service tfvars from staging snapshot"
+git add stacks/projects/*/dev/terraform.tfvars
+# Plus any variables.tf edits if you did Step 4 for any project:
+git add stacks/projects/*/dev/variables.tf 2>/dev/null
+git commit -m "fill per-project tfvars from staging snapshot"
 ```
 
 ---
 
 ## Stage 2: Bootstrap deploy (no foundation)
 
-Apply `platform/dev` first (it creates the SNS topics service stacks consume), then loop service stacks.
+Apply `platform/dev` first (it creates the SNS topics project stacks consume), then loop project stacks.
 
 Reference: `<runbook>` documents the override-file pattern in detail. This stage compresses it into per-task steps.
 
@@ -292,7 +292,7 @@ Use `#` line prefixes; leave the file parseable.
 Open the stack's tfvars and set the values the stack's `variables.tf` requires. Example shape (your variable names may differ; check `variables.tf` first):
 
 ```hcl
-alias       = "dev"
+env         = "dev"
 aws_region  = "<region>"
 sns_choice  = "create"     # creates the three SNS topics; vs "import"
 common_tags = {
@@ -322,7 +322,7 @@ terraform apply tfplan
 
 Expected: apply succeeds; state lands in `<work>/stacks/platform/dev/terraform.tfstate` (already gitignored). Six SNS topics now exist in AWS.
 
-- [ ] **Step 8: Capture the SNS topic ARNs — you'll paste them into service stacks**
+- [ ] **Step 8: Capture the SNS topic ARNs — you'll paste them into project stacks**
 
 ```bash
 aws sns list-topics --profile <profile> --region <region> --output text \
@@ -341,21 +341,21 @@ arn:aws:sns:us-east-1:<account>:dev-error-alerts-global
 arn:aws:sns:us-east-1:<account>:dev-crit-alerts-global
 ```
 
-Save these six ARNs in a scratch file — you'll paste them into each service stack's `data.tf` in Task 2.2.
+Save these six ARNs in a scratch file — you'll paste them into each project stack's `data.tf` in Task 2.2.
 
-### Task 2.2: Bootstrap and apply ONE pilot service stack
+### Task 2.2: Bootstrap and apply ONE pilot project stack
 
-Pick the simplest service in your list (fewest resources) as the pilot. Validate the pattern end-to-end before looping. The instructions below use `<pilot>` as the placeholder for that service name.
+Pick the simplest project in your list (fewest resources) as the pilot. Validate the pattern end-to-end before looping. The instructions below use `<pilot>` as the placeholder for that project name.
 
 **Files:**
-- Create: `<work>/stacks/services/<pilot>/dev/bootstrap_override.tf` (gitignored)
-- Modify: `<work>/stacks/services/<pilot>/dev/providers.tf`
-- Modify: `<work>/stacks/services/<pilot>/dev/data.tf`
+- Create: `<work>/stacks/projects/<pilot>/dev/bootstrap_override.tf` (gitignored)
+- Modify: `<work>/stacks/projects/<pilot>/dev/providers.tf`
+- Modify: `<work>/stacks/projects/<pilot>/dev/data.tf`
 
 - [ ] **Step 1: Override file (same as platform)**
 
 ```bash
-cd <work>/stacks/services/<pilot>/dev
+cd <work>/stacks/projects/<pilot>/dev
 echo "bootstrap_override.tf" >> .gitignore
 cat > bootstrap_override.tf <<'EOF'
 terraform {
@@ -366,7 +366,7 @@ EOF
 
 - [ ] **Step 2: Edit `providers.tf` — drop `assume_role`, add `profile`**
 
-Service-stack providers.tf uses `data.terraform_remote_state.platform.outputs.accounts[var.alias].tf_deployer_role_arn` inside `assume_role`. Replace the entire `assume_role { ... }` block with `profile = "<profile>"`:
+Project-stack providers.tf uses `data.terraform_remote_state.platform.outputs.accounts[var.env].tf_deployer_role_arn` inside `assume_role`. Replace the entire `assume_role { ... }` block with `profile = "<profile>"`:
 
 ```hcl
 provider "aws" {
@@ -387,7 +387,7 @@ Comment out the `data "terraform_remote_state" "platform" { ... }` block, then r
 
 ```hcl
 locals {
-  project = var.service
+  project = var.project
   sns_topic_arns = {
     WARN  = "<paste warn ARN from Task 2.1 Step 8>"
     ERROR = "<paste error ARN>"
@@ -406,7 +406,7 @@ If your platform setup uses the same ARN for global and regional (it shouldn't f
 - [ ] **Step 4: Init + plan**
 
 ```bash
-cd <work>/stacks/services/<pilot>/dev
+cd <work>/stacks/projects/<pilot>/dev
 terraform init
 terraform plan -out=tfplan
 ```
@@ -465,26 +465,26 @@ Expected:
 - `desc` starts with `[WARN]-`, `[ERROR]-`, or `[CRIT]-` (severity prefix).
 - `ok` and `alarm` both contain exactly one ARN, both pointing at the same severity-matched SNS topic from Task 2.1.
 
-If anything looks wrong here, fix before proceeding to other services.
+If anything looks wrong here, fix before proceeding to other projects.
 
-### Task 2.3: Loop the remaining services
+### Task 2.3: Loop the remaining projects
 
-**Files:** repeat Task 2.2 across each remaining service.
+**Files:** repeat Task 2.2 across each remaining project.
 
-- [ ] **Step 1: For each remaining service, repeat Task 2.2 Steps 1–7**
+- [ ] **Step 1: For each remaining project, repeat Task 2.2 Steps 1–7**
 
-Copy your `bootstrap_override.tf` from the pilot to each remaining service's directory — it's identical:
+Copy your `bootstrap_override.tf` from the pilot to each remaining project's directory — it's identical:
 
 ```bash
-for svc in <remaining-svc-1> <remaining-svc-2> ...; do
-  cd <work>/stacks/services/$svc/dev
+for project in <remaining-project-1> <remaining-project-2> ...; do
+  cd <work>/stacks/projects/$svc/dev
   echo "bootstrap_override.tf" >> .gitignore
   cp ../../<pilot>/dev/bootstrap_override.tf .
   echo "=== copied override to $svc/dev ==="
 done
 ```
 
-Then for each service, hand-edit `providers.tf` and `data.tf` per Task 2.2 Steps 2–3 (the SNS ARNs are identical across services), then `terraform init && plan && apply`.
+Then for each project, hand-edit `providers.tf` and `data.tf` per Task 2.2 Steps 2–3 (the SNS ARNs are identical across projects), then `terraform init && plan && apply`.
 
 - [ ] **Step 2: Final cross-check — total alarm count**
 
@@ -495,9 +495,9 @@ aws cloudwatch describe-alarms --profile <profile> --region us-east-1 \
   --query 'length(MetricAlarms)' --output text
 ```
 
-Expected: sum approximately matches the union of plan counts from each service's Task 2.2 Step 4. Differences worth investigating:
+Expected: sum approximately matches the union of plan counts from each project's Task 2.2 Step 4. Differences worth investigating:
 - More than expected: a stack got applied twice, or another project is creating alarms in this account.
-- Fewer than expected: a service stack didn't apply cleanly. Re-check `terraform state list` in each.
+- Fewer than expected: a project stack didn't apply cleanly. Re-check `terraform state list` in each.
 
 - [ ] **Step 3: Commit the non-gitignored edits**
 
@@ -506,7 +506,7 @@ Only `providers.tf`, `data.tf`, and any `variables.tf` edits land in git. `boots
 ```bash
 cd <work>
 git add stacks/platform/dev/providers.tf stacks/platform/dev/data.tf
-git add stacks/services/*/dev/providers.tf stacks/services/*/dev/data.tf
+git add stacks/projects/*/dev/providers.tf stacks/projects/*/dev/data.tf
 git commit -m "staging deploy: bootstrap-mode provider auth + remote_state stubs"
 git tag staging-deployed-$(date +%Y%m%d)
 ```

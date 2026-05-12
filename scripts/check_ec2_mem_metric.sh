@@ -3,7 +3,7 @@
 # metric publishing to CloudWatch. Exits 1 if any instance is missing the metric.
 #
 # Usage: check_ec2_mem_metric.sh --tfvars <path>
-# Example: check_ec2_mem_metric.sh --tfvars stacks/services/billing/dev/terraform.tfvars
+# Example: check_ec2_mem_metric.sh --tfvars stacks/projects/billing/dev/terraform.tfvars
 
 set -euo pipefail
 

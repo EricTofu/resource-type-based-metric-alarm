@@ -10,6 +10,6 @@ data "terraform_remote_state" "foundation" {
 }
 
 locals {
-  target_account       = data.terraform_remote_state.foundation.outputs.accounts[var.alias]
+  target_account       = data.terraform_remote_state.foundation.outputs.accounts[var.env]
   tf_deployer_role_arn = local.target_account.tf_deployer_role_arn
 }

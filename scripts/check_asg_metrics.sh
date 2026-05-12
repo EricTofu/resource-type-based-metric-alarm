@@ -3,7 +3,7 @@
 # enabled. Exits 1 if any ASG is missing the metric.
 #
 # Usage: check_asg_metrics.sh --tfvars <path>
-# Example: check_asg_metrics.sh --tfvars stacks/services/billing/dev/terraform.tfvars
+# Example: check_asg_metrics.sh --tfvars stacks/projects/billing/dev/terraform.tfvars
 
 set -euo pipefail
 

@@ -1,4 +1,4 @@
-alias              = "account-prod"
+env                = "prod"
 aws_region         = "<PRIMARY_REGION>"
 ops_state_bucket   = "<ORG>-tfstate"
 ops_state_role_arn = "<OPS_STATE_ROLE_ARN>"
@@ -14,7 +14,6 @@ sns_choice         = "create"
 common_tags = {
   Org         = "<ORG>"
   Environment = "prod"
-  Account     = "account-prod"
   ManagedBy   = "terraform"
   Stack       = "platform"
 }
