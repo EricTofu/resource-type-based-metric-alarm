@@ -33,6 +33,8 @@
 
 This is **the most important section** — the rest of the procedure is mechanical.
 
+> **Work-repo policy:** `<work>` deliberately **does not track AI/planning artifacts** (`docs/`, `CLAUDE.md`, `IMPLEMENTATION_PLAN.md`, `STRUCTURE.md`). These exist only in origin/synced. All pathspecs below reflect that policy. If you decide to keep one of these in `<work>`, move it from "Never sync" to "Always sync" and update the pathspec in Task 2 Step 2 and Task 3 Step 1 accordingly.
+
 ### Always sync (synced → work)
 
 | Path | Reason |
@@ -40,22 +42,23 @@ This is **the most important section** — the rest of the procedure is mechanic
 | `modules/cloudwatch/**` | Library code — generic |
 | `scripts/migrate/**`, `scripts/check_*.sh` | Generic helpers |
 | `.github/workflows/**`, `.tflint.hcl` | Generic CI/lint config |
-| `docs/**` | Specs, plans, runbooks — all generic |
-| `CLAUDE.md`, `README.md`, `STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`, `resource-type-based-metric-alarm.md` | Generic documentation |
+| `README.md`, `resource-type-based-metric-alarm.md` | Generic project documentation |
 | `versions.tf`, `.terraform.lock.hcl` (if present) | Provider/version pins |
 | `terraform.tfvars.example` | Generic example |
 | `stacks/foundation/ops/{main,outputs,variables,versions,providers}.tf`, `stacks/foundation/ops/.gitignore` | Generic foundation scaffold |
-| `stacks/platform/<alias>/{main,outputs,variables,data,versions,providers}.tf`, `stacks/platform/<alias>/.gitignore` | Generic platform scaffold |
-| `stacks/services/billing/dev/{main,outputs,variables,data,versions,providers}.tf`, `stacks/services/billing/dev/.gitignore` | Template service stack — used by `scaffold-leaf.sh` |
+| `stacks/platform/<env>/{main,outputs,variables,data,versions,providers}.tf`, `stacks/platform/<env>/.gitignore` | Generic platform scaffold |
+| `stacks/projects/billing/dev/{main,outputs,variables,data,versions,providers}.tf`, `stacks/projects/billing/dev/.gitignore` | Template project stack — used by `scaffold-leaf.sh` |
 
-### Never sync (work-only)
+### Never sync (work-only or AI-only)
 
 | Path | Reason |
 |---|---|
+| `docs/**` | AI/planning artifacts (specs, plans, runbooks) — kept in origin, stripped from work |
+| `CLAUDE.md`, `IMPLEMENTATION_PLAN.md`, `STRUCTURE.md` | AI/planning artifacts |
 | `terraform.tfvars` (anywhere — root, `stacks/**`) | Real values; differ from public `*.example` |
 | `terraform.tfstate*`, `.terraform/`, `*.tfstate.backup` | Local state |
 | `backend.hcl` (if it carries real bucket/region) | Work-specific |
-| `stacks/services/<real-service-name>/<alias>/` (anything *not* matching the upstream `billing/dev` template) | Created by `scaffold-leaf.sh` during M3 — work-specific names |
+| `stacks/projects/<real-project-name>/<env>/` (anything *not* matching the upstream `billing/dev` template) | Created by `scaffold-leaf.sh` during M3 — work-specific names |
 | `SYNC.md` itself | Sync metadata; lives only in `<work>` |
 
 ### Sync with care (conflict-prone)
@@ -107,13 +110,15 @@ Expected: a list of new commits. If empty, there's nothing to sync — exit.
 ```bash
 cd "$SYNCED"
 git diff --name-status <last-sha>..<new-sha> -- \
-  modules/ scripts/ .github/ .tflint.hcl docs/ CLAUDE.md README.md \
-  STRUCTURE.md IMPLEMENTATION_PLAN.md resource-type-based-metric-alarm.md \
+  modules/ scripts/ .github/ .tflint.hcl README.md \
+  resource-type-based-metric-alarm.md \
   versions.tf .terraform.lock.hcl terraform.tfvars.example \
-  'stacks/foundation/**' 'stacks/platform/**' 'stacks/services/billing/dev/**'
+  'stacks/foundation/**' 'stacks/platform/**' 'stacks/projects/billing/dev/**' \
+  ':(exclude)docs' ':(exclude)CLAUDE.md' \
+  ':(exclude)IMPLEMENTATION_PLAN.md' ':(exclude)STRUCTURE.md'
 ```
 
-Expected: a list of `M` (modified), `A` (added), `D` (deleted), `R` (renamed) entries. **If the list is empty: all upstream changes were in non-syncable scope (probably real-name service stacks somehow leaked, or just `SYNC.md`-style metadata). Skip to Task 5 to update the marker.**
+Expected: a list of `M` (modified), `A` (added), `D` (deleted), `R` (renamed) entries. **If the list is empty: all upstream changes were in non-syncable scope (docs-only commits, real-name project stacks, or just `SYNC.md`-style metadata). Skip to Task 5 to update the marker.**
 
 ### Task 3: Generate and attempt to apply a patch series
 
@@ -123,14 +128,26 @@ Expected: a list of `M` (modified), `A` (added), `D` (deleted), `R` (renamed) en
 cd "$SYNCED"
 mkdir -p /tmp/sync-patches
 git format-patch <last-sha>..<new-sha> -o /tmp/sync-patches -- \
-  modules/ scripts/ .github/ .tflint.hcl docs/ CLAUDE.md README.md \
-  STRUCTURE.md IMPLEMENTATION_PLAN.md resource-type-based-metric-alarm.md \
+  modules/ scripts/ .github/ .tflint.hcl README.md \
+  resource-type-based-metric-alarm.md \
   versions.tf .terraform.lock.hcl terraform.tfvars.example \
-  'stacks/foundation/**' 'stacks/platform/**' 'stacks/services/billing/dev/**'
+  'stacks/foundation/**' 'stacks/platform/**' 'stacks/projects/billing/dev/**' \
+  ':(exclude)docs' ':(exclude)CLAUDE.md' \
+  ':(exclude)IMPLEMENTATION_PLAN.md' ':(exclude)STRUCTURE.md'
+
+# Drop patches whose diff is empty (commits that only touched excluded paths,
+# e.g. docs-only commits — format-patch still emits a header-only file for them):
+for p in /tmp/sync-patches/*.patch; do
+  if ! grep -q '^diff --git' "$p"; then
+    echo "drop empty: $p"
+    rm "$p"
+  fi
+done
+
 ls /tmp/sync-patches/
 ```
 
-Expected: one `.patch` file per new commit that touched a syncable path.
+Expected: one `.patch` file per new commit that touched a syncable path. Docs-only upstream commits leave no patch behind.
 
 - [ ] **Step 2: Dry-run the patch series against work**
 
@@ -269,7 +286,27 @@ A `D` (delete) entry in Task 2 Step 2's diff means upstream removed a file. If y
 
 ### A patch touches both syncable and non-syncable scope
 
-If an upstream commit touches `modules/cloudwatch/...` *and* `stacks/services/billing/dev/terraform.tfvars` (the example tfvars), the format-patch filter in Task 3 Step 1 only includes the syncable paths. The patch may have hunks that don't apply because the surrounding context refers to the non-syncable file. Edit the patch by hand to drop the non-syncable hunks, then `git apply`.
+If an upstream commit touches `modules/cloudwatch/...` *and* `stacks/projects/billing/dev/terraform.tfvars` (the example tfvars), the format-patch filter in Task 3 Step 1 only includes the syncable paths. The patch may have hunks that don't apply because the surrounding context refers to the non-syncable file. Edit the patch by hand to drop the non-syncable hunks, then `git apply`.
+
+### Patch fails because `docs/...` doesn't exist in `<work>`'s index
+
+Symptom: `git apply` (or `git am` if you switched tools) reports `error: docs/superpowers/plans/<...>: does not exist in index` for the failing patch.
+
+Cause: the patch was generated **without** the `:(exclude)docs` filters in Task 3 Step 1 — likely an older procedure or a hand-run `git format-patch <range>` with no pathspec.
+
+Fix: abort and regenerate.
+
+```bash
+# on work, back out the failing apply:
+git apply --reverse /tmp/sync-patches/<failing>.patch 2>/dev/null || true
+git reset --hard HEAD     # only if no clean commits landed yet on this sync branch
+
+# on synced, regenerate with the full pathspec from Task 3 Step 1
+# (the `:(exclude)docs` etc. entries are what drop the missing files), then
+# re-run the empty-patch cleanup loop and resume Task 3 Step 2.
+```
+
+If a single commit was mixed code+docs (e.g. `ea329a4`-style: a code fix in `modules/cloudwatch/...` plus a doc edit under `docs/`), the regenerated patch contains only the code hunks and applies cleanly. The docs-only sibling commits drop out as empty patches.
 
 ---
 
