@@ -11,7 +11,10 @@ locals {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
-  for_each = local.asg_resources
+  for_each = {
+    for k, v in local.asg_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "in_service_capacity")
+  }
 
   alarm_name = "${var.project}-ASG-[${each.value.name}]-GroupInServiceCapacity"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.in_service_capacity)}]-${coalesce(
