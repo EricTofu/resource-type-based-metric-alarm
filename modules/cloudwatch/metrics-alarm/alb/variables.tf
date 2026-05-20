@@ -58,10 +58,10 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources : alltrue([
         for m in try(r.overrides.disabled_alarms, []) :
-        contains(["elb_5xx", "target_5xx", "unhealthy_host", "target_response_time"], m)
+        contains(["elb_5xx", "target_5xx", "unhealthy_host"], m)
       ])
     ])
-    error_message = "overrides.disabled_alarms entries must be a subset of: elb_5xx, target_5xx, unhealthy_host, target_response_time"
+    error_message = "overrides.disabled_alarms entries must be a subset of: elb_5xx, target_5xx, unhealthy_host"
   }
 
 }

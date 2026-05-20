@@ -63,10 +63,10 @@ validation {
 
 | Module | Metric IDs |
 |---|---|
-| alb | elb_5xx, target_5xx, unhealthy_host, target_response_time |
+| alb | elb_5xx, target_5xx, unhealthy_host |
 | apigateway | error_5xx |
 | asg | in_service_capacity |
-| cloudfront | error_4xx, error_5xx, origin_latency, cache_hit_rate |
+| cloudfront | error_5xx, origin_latency |
 | ec2 | status_check, status_check_ebs, cpu, memory |
 | elasticache | cpu, memory |
 | lambda | duration *(concurrency handled separately — see Special Cases)* |
@@ -75,9 +75,13 @@ validation {
 | s3 | error_5xx *(replication handled separately — see Special Cases)* |
 | ses | bounce_rate |
 
-The metric IDs match the `default_severities` map keys and the alarm resource labels in each
-module's `main.tf`. RDS `volume_bytes_used` appears in the severities map but its alarm block
-is commented out, so it is excluded from the valid set until re-enabled.
+The metric IDs match the alarm resource labels that are **actually created** in each module's
+`main.tf`. Several alarms appear in the `default_severities` map but have their `resource`
+block commented out (prior tuning); these are excluded from the valid set until re-enabled,
+because disabling an alarm that is never created would be a no-op:
+- alb: `target_response_time`
+- cloudfront: `error_4xx`, `cache_hit_rate`
+- rds: `volume_bytes_used`
 
 ## Module-side mechanics
 

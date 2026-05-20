@@ -128,13 +128,13 @@ git commit -m "feat(metrics): add disabled_alarms toggle to ec2 module"
 
 Local map: `local.alb_resources`. Metric IDs = resource labels.
 
-Labels/IDs: `elb_5xx`, `target_5xx`, `unhealthy_host`, `target_response_time`.
+Active labels/IDs: `elb_5xx`, `target_5xx`, `unhealthy_host`. **Do not** include `target_response_time` — its `resource` block is commented out in `main.tf`, so it is not a created alarm and is excluded from the valid set. Leave the commented block untouched.
 
 - [ ] **Step 1: Pattern A** — add `disabled_alarms = optional(set(string), [])` to the `overrides` object in `variables.tf`.
 
-- [ ] **Step 2: Pattern B** — add validation block with id list `["elb_5xx", "target_5xx", "unhealthy_host", "target_response_time"]` and matching error message.
+- [ ] **Step 2: Pattern B** — add validation block with id list `["elb_5xx", "target_5xx", "unhealthy_host"]` and matching error message.
 
-- [ ] **Step 3: Pattern C** — filter `for_each` on all four alarm blocks (`elb_5xx`, `target_5xx`, `unhealthy_host`, `target_response_time`), each using its own label as `<metric_id>`, replacing `local.alb_resources`.
+- [ ] **Step 3: Pattern C** — filter `for_each` on the three active alarm blocks (`elb_5xx`, `target_5xx`, `unhealthy_host`), each using its own label as `<metric_id>`, replacing `local.alb_resources`. Do not modify the commented-out `target_response_time` block.
 
 - [ ] **Step 4: Validate** — standard per-module test (`type` = `alb`).
 
@@ -154,13 +154,13 @@ git commit -m "feat(metrics): add disabled_alarms toggle to alb module"
 - Modify: `modules/cloudwatch/metrics-alarm/cloudfront/main.tf`
 - Create: `modules/cloudwatch/metrics-alarm/cloudfront/tests/disabled_alarms.tftest.hcl`
 
-Local map: `local.cloudfront_resources` (keyed by `distribution_id`). Metric IDs = resource labels: `error_4xx`, `error_5xx`, `origin_latency`, `cache_hit_rate`.
+Local map: `local.cloudfront_resources` (keyed by `distribution_id`). Active metric IDs = resource labels: `error_5xx`, `origin_latency`. **Do not** include `error_4xx` or `cache_hit_rate` — both `resource` blocks are commented out in `main.tf`, so they are not created alarms and are excluded from the valid set. Leave the commented blocks untouched.
 
 - [ ] **Step 1: Pattern A** — add `disabled_alarms = optional(set(string), [])` to the `overrides` object in `variables.tf`.
 
-- [ ] **Step 2: Pattern B** — add validation block with id list `["error_4xx", "error_5xx", "origin_latency", "cache_hit_rate"]` and matching error message.
+- [ ] **Step 2: Pattern B** — add validation block with id list `["error_5xx", "origin_latency"]` and matching error message.
 
-- [ ] **Step 3: Pattern C** — filter `for_each` on all four alarm blocks, replacing `local.cloudfront_resources`, each with its own label as `<metric_id>`.
+- [ ] **Step 3: Pattern C** — filter `for_each` on the two active alarm blocks (`error_5xx`, `origin_latency`), replacing `local.cloudfront_resources`, each with its own label as `<metric_id>`. Do not modify the commented-out `error_4xx`/`cache_hit_rate` blocks.
 
 - [ ] **Step 4: Validate** — standard per-module test (`type` = `cloudfront`).
 
@@ -186,12 +186,12 @@ run "all_alarms_by_default" {
     ]
   }
   assert {
-    condition     = length(aws_cloudwatch_metric_alarm.error_4xx) == 1
-    error_message = "error_4xx should be created by default"
+    condition     = length(aws_cloudwatch_metric_alarm.error_5xx) == 1
+    error_message = "error_5xx should be created by default"
   }
   assert {
-    condition     = length(aws_cloudwatch_metric_alarm.cache_hit_rate) == 1
-    error_message = "cache_hit_rate should be created by default"
+    condition     = length(aws_cloudwatch_metric_alarm.origin_latency) == 1
+    error_message = "origin_latency should be created by default"
   }
 }
 
@@ -201,16 +201,16 @@ run "disabled_metric_skipped" {
     resources = [
       {
         distribution_id = "E123ABC"
-        overrides       = { disabled_alarms = ["cache_hit_rate"] }
+        overrides       = { disabled_alarms = ["origin_latency"] }
       }
     ]
   }
   assert {
-    condition     = length(aws_cloudwatch_metric_alarm.cache_hit_rate) == 0
-    error_message = "cache_hit_rate should be skipped when disabled"
+    condition     = length(aws_cloudwatch_metric_alarm.origin_latency) == 0
+    error_message = "origin_latency should be skipped when disabled"
   }
   assert {
-    condition     = length(aws_cloudwatch_metric_alarm.error_4xx) == 1
+    condition     = length(aws_cloudwatch_metric_alarm.error_5xx) == 1
     error_message = "non-disabled alarms should remain"
   }
 }

@@ -199,10 +199,7 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
 # #------------------------------------------------------------------------------
 #
 # resource "aws_cloudwatch_metric_alarm" "target_response_time" {
-#   for_each = {
-#     for k, v in local.alb_resources : k => v
-#     if !contains(try(v.overrides.disabled_alarms, []), "target_response_time")
-#   }
+#   for_each = local.alb_resources
 #
 #   alarm_name = "${var.project}-ALB-[${each.value.name}]-TargetResponseTime"
 #   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.target_response_time)}]-${coalesce(
