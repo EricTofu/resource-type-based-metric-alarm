@@ -12,7 +12,10 @@ locals {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "duration" {
-  for_each = local.lambda_resources
+  for_each = {
+    for k, v in local.lambda_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "duration")
+  }
 
   alarm_name = "${var.project}-Lambda-[${each.value.name}]-Duration"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.duration)}]-${coalesce(
@@ -68,7 +71,7 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "concurrency" {
-  count = length(var.resources) > 0 ? 1 : 0
+  count = var.concurrency_alarm_enabled && length(var.resources) > 0 ? 1 : 0
 
   alarm_name        = "${var.project}-Lambda-[Account]-ClaimedAccountConcurrency"
   alarm_description = "[${local.default_severities.concurrency}]-${var.project}-Lambda-ClaimedAccountConcurrency is in ALARM state"

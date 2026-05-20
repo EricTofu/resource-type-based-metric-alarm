@@ -13,6 +13,7 @@ variable "resources" {
       severity              = optional(string)
       description           = optional(string)
       duration_threshold_ms = optional(number)
+      disabled_alarms       = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -29,6 +30,15 @@ variable "resources" {
       try(r.overrides.duration_threshold_ms, null) == null || try(r.overrides.duration_threshold_ms, 0) >= 0
     ])
     error_message = "overrides.duration_threshold_ms must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["duration"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: duration"
   }
 
 }
@@ -54,6 +64,12 @@ variable "concurrency_threshold" {
   description = "Threshold for ClaimedAccountConcurrency alarm"
   type        = number
   default     = 900
+}
+
+variable "concurrency_alarm_enabled" {
+  description = "Whether to create the account-level ClaimedAccountConcurrency alarm."
+  type        = bool
+  default     = true
 }
 
 variable "common_tags" {
