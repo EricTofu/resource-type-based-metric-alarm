@@ -86,7 +86,10 @@ locals {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "error_5xx" {
-  for_each = local.cloudfront_resources
+  for_each = {
+    for k, v in local.cloudfront_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "error_5xx")
+  }
 
   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-5xxErrorRate"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_5xx)}]-${coalesce(
@@ -142,7 +145,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "origin_latency" {
-  for_each = local.cloudfront_resources
+  for_each = {
+    for k, v in local.cloudfront_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "origin_latency")
+  }
 
   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-OriginLatency"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.origin_latency)}]-${coalesce(

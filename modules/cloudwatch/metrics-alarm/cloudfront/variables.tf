@@ -16,34 +16,35 @@ variable "resources" {
       error_5xx_threshold      = optional(number)
       origin_latency_threshold = optional(number)
       cache_hit_rate_threshold = optional(number)
+      disabled_alarms          = optional(set(string), [])
     }), {})
   }))
   validation {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.severity, null) == null
-      || contains(["WARN", "ERROR", "CRIT"], r.overrides.severity)
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
     ])
     error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.error_4xx_threshold, null) == null || try(r.overrides.error_4xx_threshold, 0) >= 0
+      try(r.overrides.error_4xx_threshold, null) == null || coalesce(try(r.overrides.error_4xx_threshold, null), 0) >= 0
     ])
     error_message = "overrides.error_4xx_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.error_5xx_threshold, null) == null || try(r.overrides.error_5xx_threshold, 0) >= 0
+      try(r.overrides.error_5xx_threshold, null) == null || coalesce(try(r.overrides.error_5xx_threshold, null), 0) >= 0
     ])
     error_message = "overrides.error_5xx_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.origin_latency_threshold, null) == null || try(r.overrides.origin_latency_threshold, 0) >= 0
+      try(r.overrides.origin_latency_threshold, null) == null || coalesce(try(r.overrides.origin_latency_threshold, null), 0) >= 0
     ])
     error_message = "overrides.origin_latency_threshold must be non-negative or omitted."
   }
@@ -51,9 +52,18 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.cache_hit_rate_threshold, null) == null
-      || (try(r.overrides.cache_hit_rate_threshold, 0) >= 0 && try(r.overrides.cache_hit_rate_threshold, 0) <= 100)
+      || (coalesce(try(r.overrides.cache_hit_rate_threshold, null), 0) >= 0 && coalesce(try(r.overrides.cache_hit_rate_threshold, null), 0) <= 100)
     ])
     error_message = "overrides.cache_hit_rate_threshold must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["error_5xx", "origin_latency"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: error_5xx, origin_latency"
   }
 
 }
