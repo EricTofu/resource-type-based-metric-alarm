@@ -12,6 +12,7 @@ variable "resources" {
       severity              = optional(string)
       description           = optional(string)
       bounce_rate_threshold = optional(number)
+      disabled_alarms       = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -29,6 +30,15 @@ variable "resources" {
       || (try(r.overrides.bounce_rate_threshold, 0) >= 0 && try(r.overrides.bounce_rate_threshold, 0) <= 100)
     ])
     error_message = "overrides.bounce_rate_threshold must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["bounce_rate"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: bounce_rate"
   }
 
 }

@@ -11,7 +11,10 @@ locals {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
-  for_each = local.ses_resources
+  for_each = {
+    for k, v in local.ses_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "bounce_rate")
+  }
 
   alarm_name = "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.bounce_rate)}]-${coalesce(
