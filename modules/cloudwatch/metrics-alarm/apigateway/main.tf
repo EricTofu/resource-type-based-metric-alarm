@@ -11,7 +11,10 @@ locals {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "error_5xx" {
-  for_each = local.apigateway_resources
+  for_each = {
+    for k, v in local.apigateway_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "error_5xx")
+  }
 
   alarm_name = "${var.project}-APIGateway-[${each.value.name}]-5XXError"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_5xx)}]-${coalesce(
