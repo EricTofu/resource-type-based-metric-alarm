@@ -22,7 +22,7 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.severity, null) == null
-      || contains(["WARN", "ERROR", "CRIT"], r.overrides.severity)
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
     ])
     error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
   }
@@ -30,7 +30,7 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.cpu_threshold, null) == null
-      || (try(r.overrides.cpu_threshold, 0) >= 0 && try(r.overrides.cpu_threshold, 0) <= 100)
+      || (coalesce(try(r.overrides.cpu_threshold, null), 0) >= 0 && coalesce(try(r.overrides.cpu_threshold, null), 0) <= 100)
     ])
     error_message = "overrides.cpu_threshold must be between 0 and 100 inclusive, or omitted."
   }
@@ -38,7 +38,7 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.jvm_memory_threshold, null) == null
-      || (try(r.overrides.jvm_memory_threshold, 0) >= 0 && try(r.overrides.jvm_memory_threshold, 0) <= 100)
+      || (coalesce(try(r.overrides.jvm_memory_threshold, null), 0) >= 0 && coalesce(try(r.overrides.jvm_memory_threshold, null), 0) <= 100)
     ])
     error_message = "overrides.jvm_memory_threshold must be between 0 and 100 inclusive, or omitted."
   }
@@ -46,14 +46,14 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.old_gen_jvm_memory_threshold, null) == null
-      || (try(r.overrides.old_gen_jvm_memory_threshold, 0) >= 0 && try(r.overrides.old_gen_jvm_memory_threshold, 0) <= 100)
+      || (coalesce(try(r.overrides.old_gen_jvm_memory_threshold, null), 0) >= 0 && coalesce(try(r.overrides.old_gen_jvm_memory_threshold, null), 0) <= 100)
     ])
     error_message = "overrides.old_gen_jvm_memory_threshold must be between 0 and 100 inclusive, or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.free_storage_threshold, null) == null || try(r.overrides.free_storage_threshold, 0) >= 0
+      try(r.overrides.free_storage_threshold, null) == null || coalesce(try(r.overrides.free_storage_threshold, null), 0) >= 0
     ])
     error_message = "overrides.free_storage_threshold must be non-negative or omitted."
   }
