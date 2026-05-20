@@ -15,6 +15,7 @@ variable "resources" {
       jvm_memory_threshold         = optional(number)
       old_gen_jvm_memory_threshold = optional(number)
       free_storage_threshold       = optional(number)
+      disabled_alarms              = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -55,6 +56,15 @@ variable "resources" {
       try(r.overrides.free_storage_threshold, null) == null || try(r.overrides.free_storage_threshold, 0) >= 0
     ])
     error_message = "overrides.free_storage_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["cpu", "jvm_memory", "old_gen_jvm", "free_storage"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: cpu, jvm_memory, old_gen_jvm, free_storage"
   }
 
 }

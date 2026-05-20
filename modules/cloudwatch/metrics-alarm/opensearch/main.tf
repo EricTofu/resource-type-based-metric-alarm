@@ -14,7 +14,10 @@ locals {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "cpu" {
-  for_each = local.opensearch_resources
+  for_each = {
+    for k, v in local.opensearch_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "cpu")
+  }
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
@@ -70,7 +73,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
-  for_each = local.opensearch_resources
+  for_each = {
+    for k, v in local.opensearch_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "jvm_memory")
+  }
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-JVMMemoryPressure"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.jvm_memory)}]-${coalesce(
@@ -126,7 +132,10 @@ resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
-  for_each = local.opensearch_resources
+  for_each = {
+    for k, v in local.opensearch_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "old_gen_jvm")
+  }
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.old_gen_jvm)}]-${coalesce(
@@ -182,7 +191,10 @@ resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "free_storage" {
-  for_each = local.opensearch_resources
+  for_each = {
+    for k, v in local.opensearch_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "free_storage")
+  }
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-FreeStorageSpace"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.free_storage)}]-${coalesce(
