@@ -55,7 +55,10 @@ data "aws_instance" "this" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "status_check" {
-  for_each = local.ec2_resources
+  for_each = {
+    for k, v in local.ec2_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "status_check")
+  }
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.status_check)}]-${coalesce(
@@ -107,7 +110,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
-  for_each = local.ec2_resources
+  for_each = {
+    for k, v in local.ec2_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "status_check_ebs")
+  }
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed_AttachedEBS"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.status_check_ebs)}]-${coalesce(
@@ -159,7 +165,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "cpu" {
-  for_each = local.ec2_resources
+  for_each = {
+    for k, v in local.ec2_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "cpu")
+  }
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
@@ -214,7 +223,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "memory" {
-  for_each = local.ec2_resources
+  for_each = {
+    for k, v in local.ec2_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "memory")
+  }
 
   alarm_name = "${var.project}-EC2-[${each.value.name}]-mem_used_percent"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.memory)}]-${coalesce(
