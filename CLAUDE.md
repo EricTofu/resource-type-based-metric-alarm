@@ -42,6 +42,8 @@ Every library module follows the same structure:
 
 Threshold resolution uses a `coalesce()` chain: per-resource override → calculated value (if applicable) → module default variable.
 
+`overrides.disabled_alarms` is an optional `set(string)` of metric IDs to skip for a resource (opt-out; default `[]` = all metrics on). Each alarm's `for_each` filters out resources whose `disabled_alarms` contains its metric ID, so no alarm is created (no cost, not just muted). Valid IDs are the labels of the module's *active* `aws_cloudwatch_metric_alarm` resources, enforced by a `validation {}` block; commented-out alarms (e.g. ALB `target_response_time`, CloudFront `error_4xx`/`cache_hit_rate`, RDS `volume_bytes_used`) are excluded. Two exceptions: S3 replication is gated by `overrides.replication_enabled` (opt-in, not `disabled_alarms`), and the Lambda account-level concurrency alarm is gated by the module input `concurrency_alarm_enabled`.
+
 ### Alarm Naming & Description
 
 - Name: `{Project}-{ResourceType}-[{ResourceName}]-{MetricName}`

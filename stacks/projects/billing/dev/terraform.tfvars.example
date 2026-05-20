@@ -17,7 +17,11 @@ common_tags = {
 alb_resources = [
   # {
   #   name = "billing-alb"
-  #   overrides = {}
+  #   overrides = {
+  #     # Skip specific metric alarms for this resource (opt-out; default = all on).
+  #     # Valid ALB IDs: elb_5xx, target_5xx, unhealthy_host
+  #     disabled_alarms = ["target_5xx"]
+  #   }
   # }
 ]
 
