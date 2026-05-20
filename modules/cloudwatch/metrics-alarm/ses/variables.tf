@@ -19,7 +19,7 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.severity, null) == null
-      || contains(["WARN", "ERROR", "CRIT"], r.overrides.severity)
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
     ])
     error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
   }
@@ -27,7 +27,7 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.bounce_rate_threshold, null) == null
-      || (try(r.overrides.bounce_rate_threshold, 0) >= 0 && try(r.overrides.bounce_rate_threshold, 0) <= 100)
+      || (coalesce(try(r.overrides.bounce_rate_threshold, null), 0) >= 0 && coalesce(try(r.overrides.bounce_rate_threshold, null), 0) <= 100)
     ])
     error_message = "overrides.bounce_rate_threshold must be between 0 and 100 inclusive, or omitted."
   }
