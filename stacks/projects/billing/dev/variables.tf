@@ -35,6 +35,12 @@ variable "lambda_concurrency_threshold" {
   default     = 900
 }
 
+variable "lambda_concurrency_alarm_enabled" {
+  description = "Whether to create the account-level Lambda concurrency alarm."
+  type        = bool
+  default     = true
+}
+
 #------------------------------------------------------------------------------
 # Resource lists — no project field; the stack injects project = var.project.
 # Override field names must exactly match the library module's resources type.
@@ -51,6 +57,7 @@ variable "alb_resources" {
       target_5xx_threshold           = optional(number)
       unhealthy_host_threshold       = optional(number)
       target_response_time_threshold = optional(number)
+      disabled_alarms                = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -64,6 +71,7 @@ variable "apigateway_resources" {
       severity            = optional(string)
       description         = optional(string)
       error_5xx_threshold = optional(number)
+      disabled_alarms     = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -78,6 +86,7 @@ variable "ec2_resources" {
       description      = optional(string)
       cpu_threshold    = optional(number)
       memory_threshold = optional(number)
+      disabled_alarms  = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -92,6 +101,7 @@ variable "asg_resources" {
       severity           = optional(string)
       description        = optional(string)
       capacity_threshold = optional(number)
+      disabled_alarms    = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -106,6 +116,7 @@ variable "lambda_resources" {
       severity              = optional(string)
       description           = optional(string)
       duration_threshold_ms = optional(number)
+      disabled_alarms       = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -129,6 +140,7 @@ variable "rds_resources" {
       volume_bytes_used_threshold            = optional(number)
       acu_utilization_threshold              = optional(number)
       serverless_capacity_threshold          = optional(number)
+      disabled_alarms                        = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -143,6 +155,7 @@ variable "s3_resources" {
       description         = optional(string)
       error_5xx_threshold = optional(number)
       replication_enabled = optional(bool)
+      disabled_alarms     = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -157,6 +170,7 @@ variable "elasticache_resources" {
       description      = optional(string)
       cpu_threshold    = optional(number)
       memory_threshold = optional(number)
+      disabled_alarms  = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -173,6 +187,7 @@ variable "opensearch_resources" {
       jvm_memory_threshold         = optional(number)
       old_gen_jvm_memory_threshold = optional(number)
       free_storage_threshold       = optional(number)
+      disabled_alarms              = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -186,6 +201,7 @@ variable "ses_resources" {
       severity              = optional(string)
       description           = optional(string)
       bounce_rate_threshold = optional(number)
+      disabled_alarms       = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -202,6 +218,7 @@ variable "cloudfront_resources" {
       error_5xx_threshold      = optional(number)
       origin_latency_threshold = optional(number)
       cache_hit_rate_threshold = optional(number)
+      disabled_alarms          = optional(set(string), [])
     }), {})
   }))
   default = []

@@ -42,11 +42,12 @@ module "lambda_alarms" {
   source = "../../../../modules/cloudwatch/metrics-alarm/lambda"
   count  = length(var.lambda_resources) > 0 ? 1 : 0
 
-  project               = var.project
-  resources             = var.lambda_resources
-  sns_topic_arns        = local.sns_topic_arns
-  common_tags           = var.common_tags
-  concurrency_threshold = var.lambda_concurrency_threshold
+  project                   = var.project
+  resources                 = var.lambda_resources
+  sns_topic_arns            = local.sns_topic_arns
+  common_tags               = var.common_tags
+  concurrency_threshold     = var.lambda_concurrency_threshold
+  concurrency_alarm_enabled = var.lambda_concurrency_alarm_enabled
 }
 
 module "rds_alarms" {
