@@ -31,14 +31,54 @@ print(m.group(1) if m else "")
 EOF
 )
 
-NAMES=$(python3 - "$TFVARS" <<'EOF'
+NAMES=$(python3 - "$TFVARS" "s3_resources" "error_5xx" <<'EOF'
 import re, sys
 content = open(sys.argv[1]).read()
-m = re.search(r's3_resources\s*=\s*\[(.*?)\]', content, re.DOTALL)
-if not m:
+list_var, metric = sys.argv[2], sys.argv[3]
+
+start = re.search(rf'{list_var}\s*=\s*\[', content)
+if not start:
     sys.exit(0)
-for name in re.findall(r'name\s*=\s*"([^"]+)"', m.group(1)):
-    print(name)
+
+# Capture the bracketed list body by bracket depth.
+i, depth, body = start.end(), 1, []
+while i < len(content) and depth > 0:
+    c = content[i]
+    if c == '[':
+        depth += 1
+    elif c == ']':
+        depth -= 1
+        if depth == 0:
+            break
+    body.append(c)
+    i += 1
+body = ''.join(body)
+
+# Split body into top-level { ... } object entries.
+entries, depth, cur = [], 0, []
+for c in body:
+    if c == '{':
+        depth += 1
+        if depth == 1:
+            cur = []
+            continue
+    if c == '}':
+        depth -= 1
+        if depth == 0:
+            entries.append(''.join(cur))
+            continue
+    if depth >= 1:
+        cur.append(c)
+
+for e in entries:
+    nm = re.search(r'name\s*=\s*"([^"]+)"', e)
+    if not nm:
+        continue
+    da = re.search(r'disabled_alarms\s*=\s*\[([^\]]*)\]', e)
+    disabled = re.findall(r'"([^"]+)"', da.group(1)) if da else []
+    if metric in disabled:
+        continue
+    print(nm.group(1))
 EOF
 )
 

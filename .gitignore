@@ -28,6 +28,7 @@ override.tf.json
 
 # Include tfvars files you do wish to add to version control using negated pattern
 !terraform.tfvars.example
+!scripts/tests/fixture.tfvars
 
 # HCLEDIT
 .hcledit
