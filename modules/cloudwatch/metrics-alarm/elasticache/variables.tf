@@ -13,6 +13,7 @@ variable "resources" {
       description      = optional(string)
       cpu_threshold    = optional(number)
       memory_threshold = optional(number)
+      disabled_alarms  = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -38,6 +39,15 @@ variable "resources" {
       || (try(r.overrides.memory_threshold, 0) >= 0 && try(r.overrides.memory_threshold, 0) <= 100)
     ])
     error_message = "overrides.memory_threshold must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["cpu", "memory"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: cpu, memory"
   }
 
 }

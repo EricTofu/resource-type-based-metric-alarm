@@ -12,7 +12,10 @@ locals {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "cpu" {
-  for_each = local.elasticache_resources
+  for_each = {
+    for k, v in local.elasticache_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "cpu")
+  }
 
   alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
@@ -67,7 +70,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "memory" {
-  for_each = local.elasticache_resources
+  for_each = {
+    for k, v in local.elasticache_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "memory")
+  }
 
   alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-DatabaseMemoryUsagePercentage"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.memory)}]-${coalesce(
