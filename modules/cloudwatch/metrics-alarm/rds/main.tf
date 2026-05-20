@@ -108,7 +108,10 @@ data "aws_db_instance" "this" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
-  for_each = local.all_instances
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "freeable_memory")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-FreeableMemory"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.freeable_memory)}]-${coalesce(
@@ -167,7 +170,10 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "cpu" {
-  for_each = local.all_instances
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "cpu")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
@@ -223,7 +229,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "database_connections" {
-  for_each = local.all_instances
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "database_connections")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-DatabaseConnections"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.database_connections)}]-${coalesce(
@@ -287,7 +296,10 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "free_storage" {
-  for_each = local.all_instances
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "free_storage")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-FreeStorageSpace"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.free_storage)}]-${coalesce(
@@ -343,7 +355,10 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
-  for_each = local.all_instances
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "engine_uptime")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-EngineUptime"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.engine_uptime)}]-${coalesce(
@@ -451,7 +466,10 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "read_latency" {
-  for_each = local.all_instances
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "read_latency")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-ReadLatency"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.read_latency)}]-${coalesce(
@@ -507,7 +525,10 @@ resource "aws_cloudwatch_metric_alarm" "read_latency" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "write_latency" {
-  for_each = local.all_instances
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "write_latency")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-WriteLatency"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.write_latency)}]-${coalesce(
@@ -563,7 +584,10 @@ resource "aws_cloudwatch_metric_alarm" "write_latency" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "acu_utilization" {
-  for_each = { for k, v in local.all_instances : k => v if v.serverless }
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if v.serverless && !contains(try(v.overrides.disabled_alarms, []), "acu_utilization")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-ACUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.acu_utilization)}]-${coalesce(
@@ -619,7 +643,10 @@ resource "aws_cloudwatch_metric_alarm" "acu_utilization" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "serverless_capacity" {
-  for_each = { for k, v in local.all_instances : k => v if v.serverless }
+  for_each = {
+    for k, v in local.all_instances : k => v
+    if v.serverless && !contains(try(v.overrides.disabled_alarms, []), "serverless_capacity")
+  }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-ServerlessDatabaseCapacity"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.serverless_capacity)}]-${coalesce(

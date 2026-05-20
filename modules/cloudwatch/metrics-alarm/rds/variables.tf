@@ -24,6 +24,7 @@ variable "resources" {
       write_latency_threshold                = optional(number)
       acu_utilization_threshold              = optional(number)
       serverless_capacity_threshold          = optional(number)
+      disabled_alarms                        = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -114,6 +115,15 @@ variable "resources" {
       try(r.overrides.serverless_capacity_threshold, null) == null || try(r.overrides.serverless_capacity_threshold, 0) >= 0
     ])
     error_message = "overrides.serverless_capacity_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["freeable_memory", "cpu", "database_connections", "free_storage", "engine_uptime", "read_latency", "write_latency", "acu_utilization", "serverless_capacity"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: freeable_memory, cpu, database_connections, free_storage, engine_uptime, read_latency, write_latency, acu_utilization, serverless_capacity"
   }
 
 }
