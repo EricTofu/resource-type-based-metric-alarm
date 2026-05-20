@@ -47,7 +47,7 @@ variable "resources" {
         contains(["status_check", "status_check_ebs", "cpu", "memory"], m)
       ])
     ])
-    error_message = "ec2 disabled_alarms must be a subset of: status_check, status_check_ebs, cpu, memory"
+    error_message = "overrides.disabled_alarms entries must be a subset of: status_check, status_check_ebs, cpu, memory"
   }
 
 }

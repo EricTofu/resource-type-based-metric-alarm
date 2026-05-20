@@ -32,9 +32,11 @@ Three concrete edits recur. Each task below states only its module-specific valu
         contains(["<ID1>", "<ID2>"], m)
       ])
     ])
-    error_message = "<module> disabled_alarms must be a subset of: <ID1>, <ID2>"
+    error_message = "overrides.disabled_alarms entries must be a subset of: <ID1>, <ID2>"
   }
 ```
+
+> Convention note: keep `try(r.overrides.disabled_alarms, [])` / `try(v.overrides.disabled_alarms, [])` even though the `optional(..., [])` default makes the value always-present. Every existing alarm in these modules accesses overrides via `try(each.value.overrides.X, ...)`, so matching that style keeps each file internally consistent. Error messages follow the existing `overrides.<field> ...` phrasing.
 
 **Pattern C — filter the alarm's `for_each`.** Replace the per-resource alarm's existing `for_each = local.<map>` with the filtered form. `<metric_id>` is the metric ID for that specific alarm resource (see each task's label→ID table):
 
@@ -358,7 +360,7 @@ Local map: `local.lambda_resources`. Per-resource metric ID: `duration`. Account
 
 - [ ] **Step 1: Pattern A** — add `disabled_alarms = optional(set(string), [])` to the `overrides` object in `variables.tf`.
 
-- [ ] **Step 2: Pattern B** — add validation block with id list `["duration"]` and error message `"lambda disabled_alarms must be a subset of: duration"`.
+- [ ] **Step 2: Pattern B** — add validation block with id list `["duration"]` and error message `"overrides.disabled_alarms entries must be a subset of: duration"`.
 
 - [ ] **Step 3: Add the concurrency variable.** In `variables.tf`, add a new top-level variable:
 
@@ -403,7 +405,7 @@ Local map: `local.s3_resources`. Only `error_5xx` is toggleable via `disabled_al
 
 - [ ] **Step 1: Pattern A** — add `disabled_alarms = optional(set(string), [])` to the `overrides` object in `variables.tf` (keep the existing `replication_enabled` field).
 
-- [ ] **Step 2: Pattern B** — add validation block with id list `["error_5xx"]` and error message `"s3 disabled_alarms must be a subset of: error_5xx"`.
+- [ ] **Step 2: Pattern B** — add validation block with id list `["error_5xx"]` and error message `"overrides.disabled_alarms entries must be a subset of: error_5xx"`.
 
 - [ ] **Step 3: Pattern C** — filter `for_each` on the `error_5xx` alarm block only, replacing `local.s3_resources` with the filtered form using `"error_5xx"`. Leave the `replication_failed` block's `for_each = local.s3_replication_resources` unchanged.
 
