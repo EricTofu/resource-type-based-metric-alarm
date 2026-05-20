@@ -49,6 +49,14 @@ Three concrete edits recur. Each task below states only its module-specific valu
 
 > Note on defaults: `overrides` defaults to `{}` and `disabled_alarms` defaults to `[]`, so `try(v.overrides.disabled_alarms, [])` is always a set; the `try` is defensive only. `contains()` accepts a set.
 
+**Pattern D — null-safe the EXISTING override validations (applies to ALL 11 modules).** A pre-existing bug: validations written as `try(r.overrides.X, null) == null || <check(r.overrides.X)>` still error, because Terraform evaluates both sides of `||` and `<check(null)>` throws ("argument must not be null"). This breaks `terraform plan`/`test` for any resource that omits the field. Confirmed via CloudFront's tftest. Fix every existing validation in each module's `resources` variable with these transformations (leave the `try(...) == null ||` guards as-is; do NOT touch the new `disabled_alarms` validation — it is already null-safe via its `[]` default):
+
+- `contains(LIST, r.overrides.X)`  →  `try(contains(LIST, r.overrides.X), false)`
+- `try(r.overrides.X, 0) >= 0`  →  `coalesce(try(r.overrides.X, null), 0) >= 0`
+- range checks `try(r.overrides.X, 0) >= 0 && try(r.overrides.X, 0) <= 100`  →  `coalesce(try(r.overrides.X, null), 0) >= 0 && coalesce(try(r.overrides.X, null), 0) <= 100`
+
+Commit Pattern D **separately** from the `disabled_alarms` feature commit (`fix(metrics): null-safe <module> override validations`). EC2 and ALB were committed before this was discovered and must be retrofitted. Verification is a controller-side ephemeral mock-provider sweep (a temp bare-resource `terraform test` per module, not committed) — the user opted not to commit a permanent tftest per module.
+
 **Standard per-module test (run where the `terraform` binary exists; no AWS creds needed):**
 
 ```bash
