@@ -31,14 +31,14 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.severity, null) == null
-      || contains(["WARN", "ERROR", "CRIT"], r.overrides.severity)
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
     ])
     error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.freeable_memory_threshold, null) == null || try(r.overrides.freeable_memory_threshold, 0) >= 0
+      try(r.overrides.freeable_memory_threshold, null) == null || coalesce(try(r.overrides.freeable_memory_threshold, null), 0) >= 0
     ])
     error_message = "overrides.freeable_memory_threshold must be non-negative or omitted."
   }
@@ -46,7 +46,7 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.freeable_memory_threshold_percent, null) == null
-      || (try(r.overrides.freeable_memory_threshold_percent, 0) >= 0 && try(r.overrides.freeable_memory_threshold_percent, 0) <= 100)
+      || (coalesce(try(r.overrides.freeable_memory_threshold_percent, null), 0) >= 0 && coalesce(try(r.overrides.freeable_memory_threshold_percent, null), 0) <= 100)
     ])
     error_message = "overrides.freeable_memory_threshold_percent must be between 0 and 100 inclusive, or omitted."
   }
@@ -54,14 +54,14 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.cpu_threshold, null) == null
-      || (try(r.overrides.cpu_threshold, 0) >= 0 && try(r.overrides.cpu_threshold, 0) <= 100)
+      || (coalesce(try(r.overrides.cpu_threshold, null), 0) >= 0 && coalesce(try(r.overrides.cpu_threshold, null), 0) <= 100)
     ])
     error_message = "overrides.cpu_threshold must be between 0 and 100 inclusive, or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.database_connections_threshold, null) == null || try(r.overrides.database_connections_threshold, 0) >= 0
+      try(r.overrides.database_connections_threshold, null) == null || coalesce(try(r.overrides.database_connections_threshold, null), 0) >= 0
     ])
     error_message = "overrides.database_connections_threshold must be non-negative or omitted."
   }
@@ -69,35 +69,35 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.database_connections_threshold_percent, null) == null
-      || (try(r.overrides.database_connections_threshold_percent, 0) >= 0 && try(r.overrides.database_connections_threshold_percent, 0) <= 100)
+      || (coalesce(try(r.overrides.database_connections_threshold_percent, null), 0) >= 0 && coalesce(try(r.overrides.database_connections_threshold_percent, null), 0) <= 100)
     ])
     error_message = "overrides.database_connections_threshold_percent must be between 0 and 100 inclusive, or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.free_storage_threshold, null) == null || try(r.overrides.free_storage_threshold, 0) >= 0
+      try(r.overrides.free_storage_threshold, null) == null || coalesce(try(r.overrides.free_storage_threshold, null), 0) >= 0
     ])
     error_message = "overrides.free_storage_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.volume_bytes_used_threshold, null) == null || try(r.overrides.volume_bytes_used_threshold, 0) >= 0
+      try(r.overrides.volume_bytes_used_threshold, null) == null || coalesce(try(r.overrides.volume_bytes_used_threshold, null), 0) >= 0
     ])
     error_message = "overrides.volume_bytes_used_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.read_latency_threshold, null) == null || try(r.overrides.read_latency_threshold, 0) >= 0
+      try(r.overrides.read_latency_threshold, null) == null || coalesce(try(r.overrides.read_latency_threshold, null), 0) >= 0
     ])
     error_message = "overrides.read_latency_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.write_latency_threshold, null) == null || try(r.overrides.write_latency_threshold, 0) >= 0
+      try(r.overrides.write_latency_threshold, null) == null || coalesce(try(r.overrides.write_latency_threshold, null), 0) >= 0
     ])
     error_message = "overrides.write_latency_threshold must be non-negative or omitted."
   }
@@ -105,14 +105,14 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.acu_utilization_threshold, null) == null
-      || (try(r.overrides.acu_utilization_threshold, 0) >= 0 && try(r.overrides.acu_utilization_threshold, 0) <= 100)
+      || (coalesce(try(r.overrides.acu_utilization_threshold, null), 0) >= 0 && coalesce(try(r.overrides.acu_utilization_threshold, null), 0) <= 100)
     ])
     error_message = "overrides.acu_utilization_threshold must be between 0 and 100 inclusive, or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.serverless_capacity_threshold, null) == null || try(r.overrides.serverless_capacity_threshold, 0) >= 0
+      try(r.overrides.serverless_capacity_threshold, null) == null || coalesce(try(r.overrides.serverless_capacity_threshold, null), 0) >= 0
     ])
     error_message = "overrides.serverless_capacity_threshold must be non-negative or omitted."
   }
