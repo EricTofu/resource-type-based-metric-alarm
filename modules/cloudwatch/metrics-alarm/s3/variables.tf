@@ -13,6 +13,7 @@ variable "resources" {
       description         = optional(string)
       error_5xx_threshold = optional(number)
       replication_enabled = optional(bool)
+      disabled_alarms     = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -29,6 +30,15 @@ variable "resources" {
       try(r.overrides.error_5xx_threshold, null) == null || try(r.overrides.error_5xx_threshold, 0) >= 0
     ])
     error_message = "overrides.error_5xx_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["error_5xx"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: error_5xx"
   }
 
 }
