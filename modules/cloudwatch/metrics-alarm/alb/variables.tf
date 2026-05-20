@@ -22,35 +22,35 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.severity, null) == null
-      || contains(["WARN", "ERROR", "CRIT"], r.overrides.severity)
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
     ])
     error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.elb_5xx_threshold, null) == null || try(r.overrides.elb_5xx_threshold, 0) >= 0
+      try(r.overrides.elb_5xx_threshold, null) == null || coalesce(try(r.overrides.elb_5xx_threshold, null), 0) >= 0
     ])
     error_message = "overrides.elb_5xx_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.target_5xx_threshold, null) == null || try(r.overrides.target_5xx_threshold, 0) >= 0
+      try(r.overrides.target_5xx_threshold, null) == null || coalesce(try(r.overrides.target_5xx_threshold, null), 0) >= 0
     ])
     error_message = "overrides.target_5xx_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.unhealthy_host_threshold, null) == null || try(r.overrides.unhealthy_host_threshold, 0) >= 0
+      try(r.overrides.unhealthy_host_threshold, null) == null || coalesce(try(r.overrides.unhealthy_host_threshold, null), 0) >= 0
     ])
     error_message = "overrides.unhealthy_host_threshold must be non-negative or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.target_response_time_threshold, null) == null || try(r.overrides.target_response_time_threshold, 0) >= 0
+      try(r.overrides.target_response_time_threshold, null) == null || coalesce(try(r.overrides.target_response_time_threshold, null), 0) >= 0
     ])
     error_message = "overrides.target_response_time_threshold must be non-negative or omitted."
   }
