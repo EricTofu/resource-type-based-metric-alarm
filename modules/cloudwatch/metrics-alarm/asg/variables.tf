@@ -20,14 +20,14 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources :
       try(r.overrides.severity, null) == null
-      || contains(["WARN", "ERROR", "CRIT"], r.overrides.severity)
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
     ])
     error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(r.overrides.capacity_threshold, null) == null || try(r.overrides.capacity_threshold, 0) >= 0
+      try(r.overrides.capacity_threshold, null) == null || coalesce(try(r.overrides.capacity_threshold, null), 0) >= 0
     ])
     error_message = "overrides.capacity_threshold must be non-negative or omitted."
   }
