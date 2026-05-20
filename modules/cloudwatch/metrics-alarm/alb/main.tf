@@ -25,7 +25,10 @@ data "aws_lb" "this" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "elb_5xx" {
-  for_each = local.alb_resources
+  for_each = {
+    for k, v in local.alb_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "elb_5xx")
+  }
 
   alarm_name = "${var.project}-ALB-[${each.value.name}]-HTTPCode_ELB_5XX_Count"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.elb_5xx)}]-${coalesce(
@@ -80,7 +83,10 @@ resource "aws_cloudwatch_metric_alarm" "elb_5xx" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "target_5xx" {
-  for_each = local.alb_resources
+  for_each = {
+    for k, v in local.alb_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "target_5xx")
+  }
 
   alarm_name = "${var.project}-ALB-[${each.value.name}]-HTTPCode_Target_5XX_Count"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.target_5xx)}]-${coalesce(
@@ -135,7 +141,10 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
-  for_each = local.alb_resources
+  for_each = {
+    for k, v in local.alb_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "unhealthy_host")
+  }
 
   alarm_name = "${var.project}-ALB-[${each.value.name}]-UnHealthyHostCount"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.unhealthy_host)}]-${coalesce(
@@ -190,7 +199,10 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
 # #------------------------------------------------------------------------------
 #
 # resource "aws_cloudwatch_metric_alarm" "target_response_time" {
-#   for_each = local.alb_resources
+#   for_each = {
+#     for k, v in local.alb_resources : k => v
+#     if !contains(try(v.overrides.disabled_alarms, []), "target_response_time")
+#   }
 #
 #   alarm_name = "${var.project}-ALB-[${each.value.name}]-TargetResponseTime"
 #   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.target_response_time)}]-${coalesce(

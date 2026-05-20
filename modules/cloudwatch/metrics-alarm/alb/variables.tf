@@ -15,6 +15,7 @@ variable "resources" {
       target_5xx_threshold           = optional(number)
       unhealthy_host_threshold       = optional(number)
       target_response_time_threshold = optional(number)
+      disabled_alarms                = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -52,6 +53,15 @@ variable "resources" {
       try(r.overrides.target_response_time_threshold, null) == null || try(r.overrides.target_response_time_threshold, 0) >= 0
     ])
     error_message = "overrides.target_response_time_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["elb_5xx", "target_5xx", "unhealthy_host", "target_response_time"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: elb_5xx, target_5xx, unhealthy_host, target_response_time"
   }
 
 }
