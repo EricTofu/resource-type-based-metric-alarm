@@ -1,0 +1,12 @@
+alias              = "dev"
+aws_region         = "<PRIMARY_REGION>"
+ops_bucket         = "<ORG>-tfstate"
+ops_state_role_arn = "<OPS_STATE_ROLE_ARN>"
+sns_choice         = "create"
+
+existing_sns_arns = {}
+
+common_tags = {
+  ManagedBy = "Terraform"
+  Project   = "cloudwatch-alarm-library"
+}
