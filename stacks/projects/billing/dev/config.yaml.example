@@ -1,0 +1,144 @@
+# ============================================================================
+# config.yaml — committed deploy intent for this leaf (replaces terraform.tfvars)
+# ----------------------------------------------------------------------------
+# Copy to config.yaml and edit. This file IS committed (YAML is not a *.tfvars,
+# so it is exempt from the org "no tfvars in git" rule). The leaf reads it via
+#   yamldecode(file("${path.module}/config.yaml"))
+# Resource-list values are coerced + defaulted + validated at the library
+# module boundary, so omit anything that only takes its default.
+# ============================================================================
+
+# ─── Stack wiring (was the scalar vars in terraform.tfvars) ─────────────────
+project:            billing
+env:                dev
+aws_region:         ap-northeast-1
+ops_bucket:         <ORG>-tfstate
+ops_state_role_arn: arn:aws:iam::<OPS_ACCOUNT_ID>:role/tf-state-access
+# SNS topics (create vs import) are a PLATFORM stack concern — this leaf only
+# reads the resulting ARNs from platform remote state. Configure sns_choice /
+# existing_sns_arns in stacks/platform/<env>/, not here.
+lambda_concurrency_threshold: 900     # account-level concurrency alarm threshold
+# lambda_concurrency_alarm_enabled: true
+common_tags:
+  ManagedBy:   terraform
+  Environment: dev
+  Stack:       projects/billing
+
+# ─── What to monitor (was the *_resources lists) ───────────────────────────
+# One key per resource type, named without the "_resources" suffix.
+# Omit a key entirely (or use []) for types this project does not use.
+resources:
+
+  alb:
+    # target_groups (target group names) is required for the UnHealthyHostCount
+    # alarm — the metric only exists per (TargetGroup, LoadBalancer) pair.
+    - name: billing-public-alb
+      target_groups: [billing-public-tg]
+    # tighten one threshold and raise severity
+    - name: billing-internal-alb
+      target_groups: [billing-internal-tg, billing-internal-admin-tg]
+      overrides:
+        severity:             ERROR
+        target_5xx_threshold: 3
+    # opt specific alarms OUT (valid alb ids: elb_5xx, target_5xx, unhealthy_host);
+    # with unhealthy_host disabled, target_groups may be omitted
+    - name: billing-legacy-alb
+      overrides:
+        disabled_alarms: [target_5xx, unhealthy_host]
+
+  apigateway:
+    - name: billing-public-api
+    - name: billing-partner-api
+      overrides:
+        severity:            CRIT
+        error_5xx_threshold: 5
+        description:         "Partner-facing API — page on 5xx"
+
+  ec2:
+    - name: billing-worker-1
+    - name: billing-worker-2
+    - name: billing-batch-host
+      overrides:
+        cpu_threshold:    90
+        memory_threshold: 85
+        disabled_alarms:  [memory]      # e.g. no CWAgent on this host
+
+  asg:
+    # desired_capacity is REQUIRED (drives the capacity threshold)
+    - name: billing-web-asg
+      desired_capacity: 4
+    - name: billing-worker-asg
+      desired_capacity: 2
+      overrides:
+        severity:           ERROR
+        capacity_threshold: 1
+
+  lambda:
+    # timeout_ms is REQUIRED (drives the duration threshold)
+    # valid lambda ids: duration, errors, throttles
+    - name: billing-invoice-generator
+      timeout_ms: 30000
+    - name: billing-webhook-handler
+      timeout_ms: 5000
+      overrides:
+        severity:              CRIT
+        duration_threshold_ms: 4000
+        disabled_alarms:       [throttles]   # e.g. reserved-concurrency spikes are expected
+
+  rds:
+    # standalone instance
+    - name: billing-primary
+      overrides:
+        cpu_threshold:                  80
+        database_connections_threshold: 400
+    # Aurora cluster — is_cluster expands to member instances
+    - name: billing-aurora
+      is_cluster: true
+      overrides:
+        freeable_memory_threshold_percent: 15
+    # Aurora Serverless v2 — adds ACU / capacity alarms
+    - name: billing-aurora-sv2
+      is_cluster: true
+      serverless: true
+      overrides:
+        acu_utilization_threshold: 85
+
+  s3:
+    - name: billing-invoices-bucket
+    - name: billing-exports-bucket
+      overrides:
+        # enables the OperationsFailedReplication alarm; the metric is published
+        # per (SourceBucket, DestinationBucket, RuleId), so the destination is
+        # required. replication_rule_id defaults to "EntireBucket".
+        replication_enabled:            true
+        replication_destination_bucket: billing-exports-bucket-replica
+        error_5xx_threshold:            10
+
+  elasticache:
+    - name: billing-session-cache
+      overrides:
+        cpu_threshold:    75
+        memory_threshold: 80
+
+  opensearch:
+    - name: billing-search
+      overrides:
+        free_storage_threshold: 20480   # MB (FreeStorageSpace unit)
+        disabled_alarms:        [old_gen_jvm_memory]
+
+  ses:
+    - name: billing-notifications
+      overrides:
+        bounce_rate_threshold: 5
+
+  cloudfront:
+    # cloudfront keys on distribution_id; name is optional (alarm naming only)
+    - distribution_id: E1ABCDEF234567
+      name: billing-portal-cdn
+      overrides:
+        description: "Billing portal CDN"
+    - distribution_id: E2GHIJKL890123
+      overrides:
+        severity:                 ERROR
+        origin_latency_threshold: 2000   # ms
+        error_5xx_threshold:      2
