@@ -25,13 +25,9 @@ This project creates CloudWatch metric alarms for 11 AWS resource types using a 
 2. **Platform stacks** (`stacks/platform/<env>/`) — SNS topics per account, state in Ops bucket
 3. **Project stacks** (`stacks/projects/<project>/<env>/`) — call library modules, read SNS ARNs and the foundation `accounts` map from platform via `terraform_remote_state`
 
-### Data Flow (legacy monolithic root — pre-M4)
+### Data Flow
 
-`variables.tf` (root) defines typed resource lists → `main.tf` instantiates per-module `for_each` loops keyed by project → each `modules/cloudwatch/metrics-alarm/<type>/` creates alarms for every resource in the list.
-
-### Data Flow (per-project stacks — post-M2)
-
-`stacks/projects/<project>/<env>/terraform.tfvars` → `main.tf` calls library modules directly with `count = length(var.<type>_resources) > 0 ? 1 : 0` → SNS ARNs come from `data.terraform_remote_state.platform.outputs.sns_topic_arns`.
+`stacks/projects/<project>/<env>/terraform.tfvars` → `main.tf` calls library modules directly with `count = length(var.<type>_resources) > 0 ? 1 : 0` → SNS ARNs come from `data.terraform_remote_state.platform.outputs.sns_topic_arns`. There is no root Terraform configuration — every `terraform` command runs inside a stack directory (the legacy monolithic root was removed at M4).
 
 ### Module Pattern
 
@@ -73,5 +69,5 @@ To run locally: `scripts/check_ec2_mem_metric.sh --tfvars stacks/projects/<proje
 
 1. Create `modules/cloudwatch/metrics-alarm/<type>/variables.tf` and `modules/cloudwatch/metrics-alarm/<type>/main.tf` following the existing module pattern.
 2. Add `outputs.tf` exporting `alarm_arns` and `alarm_names`.
-3. Add the resource list variable to root `variables.tf` (legacy root) and any project stack `variables.tf` that needs it.
-4. Add a `module "monitor_<type>"` block to root `main.tf` with a `for_each` keyed by `group.project`.
+3. Add the `<type>_resources` list variable to each project stack `variables.tf` that needs it (mirroring the module's `resources` type, minus defaults the module already applies).
+4. Add a `module "<type>_alarms"` block to the stack's `main.tf` with `count = length(var.<type>_resources) > 0 ? 1 : 0`.

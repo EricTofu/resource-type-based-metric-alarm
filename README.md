@@ -5,55 +5,41 @@ A modular Terraform project to manage CloudWatch metric alarms for AWS resources
 ## Features
 
 - **11 Monitoring Modules**: ALB, API Gateway, EC2, ASG, Lambda, RDS, S3, CloudFront, ElastiCache, OpenSearch, SES
-- **DRY Configuration**: Use `for_each` loops to create alarms from resource lists
+- **Three-layer Layout**: stateless library modules → platform stacks (SNS topics) → project stacks (alarms)
 - **Severity-based SNS Routing**: WARN/ERROR/CRIT → different SNS topics
-- **Per-resource Overrides**: Customize thresholds, severity, and descriptions per resource
-- **Project Grouping**: Organize resources by project for clear alarm naming
+- **Per-resource Overrides**: Customize thresholds, severity, and descriptions per resource; opt out of individual alarms via `disabled_alarms`
 
 ## Project Structure
 
 ```text
 .
-├── main.tf                          # Root module, instantiates all monitoring modules
-├── variables.tf                     # Global variables and resource lists
-├── versions.tf                      # Terraform and provider version constraints
-├── terraform.tfvars.example         # Example configuration
-└── modules/
-    ├── monitor-alb/                 # ALB monitoring (4 alarms)
-    ├── monitor-apigateway/          # API Gateway monitoring (1 alarm)
-    ├── monitor-ec2/                 # EC2 monitoring (4 alarms)
-    ├── monitor-asg/                 # ASG monitoring (1 alarm)
-    ├── monitor-lambda/              # Lambda monitoring (2 alarms)
-    ├── monitor-rds/                 # RDS/Aurora monitoring (5 alarms)
-    ├── monitor-s3/                  # S3 monitoring (2 alarms)
-    ├── monitor-cloudfront/          # CloudFront monitoring (4 alarms)
-    ├── monitor-elasticache/         # ElastiCache monitoring (2 alarms)
-    ├── monitor-opensearch/          # OpenSearch monitoring (4 alarms)
-    └── monitor-ses/                 # SES monitoring (1 alarm)
+├── modules/cloudwatch/metrics-alarm/   # Stateless library modules (one per resource type)
+│   ├── alb/  apigateway/  asg/  cloudfront/  ec2/  elasticache/
+│   ├── lambda/  opensearch/  rds/  s3/  ses/
+├── stacks/
+│   ├── foundation/ops/                 # Ops account: state bucket, accounts map
+│   ├── platform/<env>/                 # Per-account SNS topics (create or import)
+│   └── projects/<project>/<env>/       # Alarm stacks — call library modules
+└── scripts/                            # Preflight metric checks, migration helpers
 ```
+
+There is no root Terraform configuration — every `terraform` command runs inside a stack directory.
 
 ## Quick Start
 
-1. Copy the example configuration:
+1. Pick (or scaffold) a project stack and fill in its configuration:
 
    ```bash
-   cp terraform.tfvars.example terraform.tfvars
+   cd stacks/projects/<project>/<env>
+   cp terraform.tfvars.example terraform.tfvars   # or config.yaml.example → config.yaml
    ```
 
-2. Edit `terraform.tfvars` with your SNS topic ARNs and resources:
-
-   ```hcl
-   sns_topic_arns = {
-     WARN  = "arn:aws:sns:ap-northeast-1:123456789012:warning-alerts"
-     ERROR = "arn:aws:sns:ap-northeast-1:123456789012:error-alerts"
-     CRIT  = "arn:aws:sns:ap-northeast-1:123456789012:critical-alerts"
-   }
-   ```
+2. List the resources to monitor per type (`alb_resources`, `ec2_resources`, …). SNS topic ARNs are read from the platform stack via remote state — deploy `stacks/platform/<env>/` first.
 
 3. Initialize and apply:
 
    ```bash
-   terraform init
+   terraform init -backend-config=backend.hcl
    terraform plan
    terraform apply
    ```
@@ -62,63 +48,52 @@ A modular Terraform project to manage CloudWatch metric alarms for AWS resources
 
 ### Resource List Format
 
-Each resource type uses a list grouped by project:
+Each project stack takes a flat list per resource type; the stack injects the project name:
 
 ```hcl
 ec2_resources = [
-  {
-    project = "project1"
-    resources = [
-      { name = "web-server-1" },
-      { name = "web-server-2", overrides = { cpu_threshold = 90 } }
-    ]
-  },
-  {
-    project = "project2"
-    resources = [
-      { name = "api-server-1", overrides = { severity = "CRIT" } }
-    ]
-  }
+  { name = "web-server-1" },
+  { name = "web-server-2", overrides = { cpu_threshold = 90 } },
+  { name = "batch-host", overrides = { severity = "CRIT", disabled_alarms = ["memory"] } }
 ]
 ```
 
 ### Per-Resource Overrides
 
-Override default values for individual resources:
-
-| Override Field | Description                                 |
-| -------------- | ------------------------------------------- |
-| `severity`     | Override default severity (WARN/ERROR/CRIT) |
-| `description`  | Custom alarm description                    |
-| `*_threshold`  | Metric-specific threshold override          |
+| Override Field    | Description                                                  |
+| ----------------- | ------------------------------------------------------------ |
+| `severity`        | Override default severity (WARN/ERROR/CRIT)                  |
+| `description`     | Custom alarm description                                     |
+| `*_threshold`     | Metric-specific threshold override                           |
+| `disabled_alarms` | Set of metric IDs to skip for this resource (opt-out)        |
 
 ### Alarm Naming Convention
 
 ```text
-{Project}-{ResourceType}-{ResourceName}-{MetricName}
+{Project}-{ResourceType}-[{ResourceName}]-{MetricName}
 ```
 
-Example: `project1-EC2-web-server-1-CPUUtilization`
+Example: `project1-EC2-[web-server-1]-CPUUtilization`
 
 ## Metrics by Resource Type
 
-| Resource Type   | Metrics                                                                                         |
-| --------------- | ----------------------------------------------------------------------------------------------- |
-| **ALB**         | HTTPCode_ELB_5XX_Count, HTTPCode_Target_5XX_Count, UnHealthyHostCount, TargetResponseTime (p90) |
-| **API Gateway** | 5XXError                                                                                        |
-| **EC2**         | StatusCheckFailed, StatusCheckFailed_AttachedEBS, CPUUtilization, mem_used_percent              |
-| **ASG**         | GroupInServiceCapacity                                                                          |
-| **Lambda**      | Duration (p90), ClaimedAccountConcurrency                                                       |
-| **RDS**         | FreeableMemory, CPUUtilization, DatabaseConnections, FreeStorageSpace, EngineUptime             |
-| **S3**          | 5xxErrors, OperationsFailedReplication                                                          |
-| **ElastiCache** | CPUUtilization, DatabaseMemoryUsagePercentage                                                   |
-| **OpenSearch**  | CPUUtilization, JVMMemoryPressure, OldGenJVMMemoryPressure, FreeStorageSpace                    |
-| **SES**         | Reputation.BounceRate                                                                           |
-| **CloudFront**  | 4xxErrorRate, 5xxErrorRate, OriginLatency, CacheHitRate                                         |
+| Resource Type   | Metrics                                                                              |
+| --------------- | ------------------------------------------------------------------------------------ |
+| **ALB**         | HTTPCode_ELB_5XX_Count, HTTPCode_Target_5XX_Count, UnHealthyHostCount (per target group — requires `target_groups`) |
+| **API Gateway** | 5XXError                                                                             |
+| **EC2**         | StatusCheckFailed, StatusCheckFailed_AttachedEBS, CPUUtilization, mem_used_percent   |
+| **ASG**         | GroupInServiceCapacity                                                               |
+| **Lambda**      | Duration (p90), Errors, Throttles, ClaimedAccountConcurrency (account-level)         |
+| **RDS**         | FreeableMemory, CPUUtilization, DatabaseConnections, ReadLatency (p90), WriteLatency (p90), FreeStorageSpace (non-Aurora), EngineUptime (Aurora), ACUUtilization + ServerlessDatabaseCapacity (Serverless v2) |
+| **S3**          | 5xxErrors, OperationsFailedReplication (opt-in, requires destination bucket)         |
+| **ElastiCache** | CPUUtilization, DatabaseMemoryUsagePercentage                                        |
+| **OpenSearch**  | CPUUtilization, JVMMemoryPressure, OldGenJVMMemoryPressure, FreeStorageSpace         |
+| **SES**         | Reputation.BounceRate                                                                |
+| **CloudFront**  | 5xxErrorRate, OriginLatency (us-east-1, via global SNS topics)                       |
 
 ## Requirements
 
-- Terraform >= 1.0
+- Terraform >= 1.10
 - AWS Provider >= 5.0
 - AWS credentials with CloudWatch and resource read permissions
 
