@@ -4,11 +4,18 @@ ops_state_bucket   = "<ORG>-tfstate"
 ops_state_role_arn = "<OPS_STATE_ROLE_ARN>"
 sns_choice         = "create"
 
-# sns_choice = "import" — uncomment and fill if adopting existing topics:
+# sns_choice = "import" — uncomment and fill BOTH maps if adopting existing
+# topics. The global map must be us-east-1 topics: CloudWatch alarms can only
+# notify same-region topics, and CloudFront alarms live in us-east-1.
 # existing_sns_arns = {
 #   WARN  = "arn:aws:sns:<REGION>:<ACCOUNT_ID>:<TOPIC_NAME>"
 #   ERROR = "arn:aws:sns:<REGION>:<ACCOUNT_ID>:<TOPIC_NAME>"
 #   CRIT  = "arn:aws:sns:<REGION>:<ACCOUNT_ID>:<TOPIC_NAME>"
+# }
+# existing_sns_arns_global = {
+#   WARN  = "arn:aws:sns:us-east-1:<ACCOUNT_ID>:<TOPIC_NAME>"
+#   ERROR = "arn:aws:sns:us-east-1:<ACCOUNT_ID>:<TOPIC_NAME>"
+#   CRIT  = "arn:aws:sns:us-east-1:<ACCOUNT_ID>:<TOPIC_NAME>"
 # }
 
 common_tags = {

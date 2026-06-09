@@ -5,7 +5,7 @@ locals {
     CRIT  = aws_sns_topic.regional["CRIT"].arn
   }
 
-  sns_topic_arns_global = var.sns_choice == "import" ? var.existing_sns_arns : {
+  sns_topic_arns_global = var.sns_choice == "import" ? var.existing_sns_arns_global : {
     WARN  = aws_sns_topic.global["WARN"].arn
     ERROR = aws_sns_topic.global["ERROR"].arn
     CRIT  = aws_sns_topic.global["CRIT"].arn
