@@ -1,5 +1,7 @@
 # Deploy Cutover Runbook — Implementation Plan
 
+> ⚠️ **ARCHIVED — DO NOT FOLLOW.** This runbook described a state-migration cutover from the monolithic root into the per-stack layout. That migration path was abandoned in favor of a nuke-and-redeploy on staging. Active deploy runbook is **`docs/superpowers/plans/2026-05-12-staging-redeploy-no-foundation.md`**. This file is retained for historical context only. Identifiers in the examples below (`stacks/services/`, `var.alias`, `account-*` keys) reflect the pre-rename naming and will not match the current code.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Apply the M0–M4 refactor against a real AWS environment from a separate "deploy" machine, in order, with verification gates and a clear rollback path between stages.

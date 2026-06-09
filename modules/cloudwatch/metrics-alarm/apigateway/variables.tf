@@ -1,0 +1,76 @@
+variable "project" {
+  description = "Project name for alarm naming"
+  type        = string
+}
+
+variable "resources" {
+  description = "List of API Gateway resources to monitor"
+  type = list(object({
+    name    = string
+    enabled = optional(bool, true)
+    overrides = optional(object({
+      severity            = optional(string)
+      description         = optional(string)
+      error_5xx_threshold = optional(number)
+      disabled_alarms     = optional(set(string), [])
+    }), {})
+  }))
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.severity, null) == null
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
+    ])
+    error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.error_5xx_threshold, null) == null || coalesce(try(r.overrides.error_5xx_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.error_5xx_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["error_5xx"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: error_5xx"
+  }
+
+}
+
+variable "sns_topic_arns" {
+  description = "SNS topic ARNs mapped by severity"
+  type = object({
+    WARN  = string
+    ERROR = string
+    CRIT  = string
+  })
+  validation {
+    condition = alltrue([
+      for k in ["WARN", "ERROR", "CRIT"] :
+      can(regex("^arn:aws:sns:", var.sns_topic_arns[k]))
+    ])
+    error_message = "sns_topic_arns values must be SNS ARNs (starting with arn:aws:sns:)."
+  }
+
+}
+
+#------------------------------------------------------------------------------
+# Default Thresholds
+#------------------------------------------------------------------------------
+
+variable "default_5xx_error_threshold" {
+  description = "Default threshold for 5XXError rate"
+  type        = number
+  default     = 0.05
+}
+
+variable "common_tags" {
+  description = "Tags merged into every alarm this module creates. Module-specific tags (Project, ResourceType, ResourceName) always take precedence on key collision."
+  type        = map(string)
+  default     = {}
+}

@@ -1,0 +1,222 @@
+variable "project" {
+  description = "Project name for alarm naming"
+  type        = string
+}
+
+variable "resources" {
+  description = "List of RDS/Aurora resources to monitor"
+  type = list(object({
+    name       = string
+    enabled    = optional(bool, true)
+    is_cluster = optional(bool, false)
+    serverless = optional(bool, false)
+    overrides = optional(object({
+      severity                               = optional(string)
+      description                            = optional(string)
+      freeable_memory_threshold              = optional(number)
+      freeable_memory_threshold_percent      = optional(number)
+      cpu_threshold                          = optional(number)
+      database_connections_threshold         = optional(number)
+      database_connections_threshold_percent = optional(number)
+      free_storage_threshold                 = optional(number)
+      volume_bytes_used_threshold            = optional(number)
+      read_latency_threshold                 = optional(number)
+      write_latency_threshold                = optional(number)
+      acu_utilization_threshold              = optional(number)
+      serverless_capacity_threshold          = optional(number)
+      disabled_alarms                        = optional(set(string), [])
+    }), {})
+  }))
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.severity, null) == null
+      || try(contains(["WARN", "ERROR", "CRIT"], r.overrides.severity), false)
+    ])
+    error_message = "overrides.severity must be one of WARN, ERROR, CRIT (case-sensitive) or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.freeable_memory_threshold, null) == null || coalesce(try(r.overrides.freeable_memory_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.freeable_memory_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.freeable_memory_threshold_percent, null) == null
+      || (coalesce(try(r.overrides.freeable_memory_threshold_percent, null), 0) >= 0 && coalesce(try(r.overrides.freeable_memory_threshold_percent, null), 0) <= 100)
+    ])
+    error_message = "overrides.freeable_memory_threshold_percent must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.cpu_threshold, null) == null
+      || (coalesce(try(r.overrides.cpu_threshold, null), 0) >= 0 && coalesce(try(r.overrides.cpu_threshold, null), 0) <= 100)
+    ])
+    error_message = "overrides.cpu_threshold must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.database_connections_threshold, null) == null || coalesce(try(r.overrides.database_connections_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.database_connections_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.database_connections_threshold_percent, null) == null
+      || (coalesce(try(r.overrides.database_connections_threshold_percent, null), 0) >= 0 && coalesce(try(r.overrides.database_connections_threshold_percent, null), 0) <= 100)
+    ])
+    error_message = "overrides.database_connections_threshold_percent must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.free_storage_threshold, null) == null || coalesce(try(r.overrides.free_storage_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.free_storage_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.volume_bytes_used_threshold, null) == null || coalesce(try(r.overrides.volume_bytes_used_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.volume_bytes_used_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.read_latency_threshold, null) == null || coalesce(try(r.overrides.read_latency_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.read_latency_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.write_latency_threshold, null) == null || coalesce(try(r.overrides.write_latency_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.write_latency_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.acu_utilization_threshold, null) == null
+      || (coalesce(try(r.overrides.acu_utilization_threshold, null), 0) >= 0 && coalesce(try(r.overrides.acu_utilization_threshold, null), 0) <= 100)
+    ])
+    error_message = "overrides.acu_utilization_threshold must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.serverless_capacity_threshold, null) == null || coalesce(try(r.overrides.serverless_capacity_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.serverless_capacity_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources : alltrue([
+        for m in try(r.overrides.disabled_alarms, []) :
+        contains(["freeable_memory", "cpu", "database_connections", "free_storage", "engine_uptime", "read_latency", "write_latency", "acu_utilization", "serverless_capacity"], m)
+      ])
+    ])
+    error_message = "overrides.disabled_alarms entries must be a subset of: freeable_memory, cpu, database_connections, free_storage, engine_uptime, read_latency, write_latency, acu_utilization, serverless_capacity"
+  }
+
+}
+
+variable "sns_topic_arns" {
+  description = "SNS topic ARNs mapped by severity"
+  type = object({
+    WARN  = string
+    ERROR = string
+    CRIT  = string
+  })
+  validation {
+    condition = alltrue([
+      for k in ["WARN", "ERROR", "CRIT"] :
+      can(regex("^arn:aws:sns:", var.sns_topic_arns[k]))
+    ])
+    error_message = "sns_topic_arns values must be SNS ARNs (starting with arn:aws:sns:)."
+  }
+
+}
+
+#------------------------------------------------------------------------------
+# Default Thresholds
+#------------------------------------------------------------------------------
+
+variable "default_freeable_memory_threshold" {
+  description = "Default threshold for FreeableMemory (bytes). Only used if percentage calculation is disabled or fails."
+  type        = number
+  default     = 1073741824 # 1GB
+}
+
+variable "default_freeable_memory_threshold_percent" {
+  description = "Default threshold for FreeableMemory as a percentage of total RAM (e.g., 10 for 10%)"
+  type        = number
+  default     = 10
+}
+
+variable "default_cpu_threshold" {
+  description = "Default threshold for CPUUtilization"
+  type        = number
+  default     = 90
+}
+
+variable "default_database_connections_threshold" {
+  description = "Last-resort fallback threshold for DatabaseConnections. Used only when the instance class is not in instance_memory_map and no per-resource override is set. Set explicitly in tfvars for accurate workload-specific values."
+  type        = number
+  default     = 2700
+}
+
+variable "default_database_connections_threshold_percent" {
+  description = "Default database connections threshold percentage (if not overridden per resource)"
+  type        = number
+  default     = 80
+}
+
+variable "default_free_storage_threshold" {
+  description = "Default threshold for FreeStorageSpace (bytes)"
+  type        = number
+  default     = 10737418240 # 10GB
+}
+
+variable "default_volume_bytes_used_threshold" {
+  description = "Default threshold for VolumeBytesUsed (bytes). Only applicable to Aurora clusters."
+  type        = number
+  default     = 21474836480 # 20GB
+}
+
+variable "default_read_latency_threshold" {
+  description = "Default threshold for ReadLatency (seconds)"
+  type        = number
+  default     = 0.1
+}
+
+variable "default_write_latency_threshold" {
+  description = "Default threshold for WriteLatency (seconds)"
+  type        = number
+  default     = 0.2
+}
+
+variable "default_acu_utilization_threshold" {
+  description = "Default threshold for ACUUtilization"
+  type        = number
+  default     = 90
+}
+
+variable "default_serverless_capacity_threshold" {
+  description = "Default threshold for ServerlessDatabaseCapacity"
+  type        = number
+  default     = 128
+}
+
+variable "common_tags" {
+  description = "Tags merged into every alarm this module creates. Module-specific tags (Project, ResourceType, ResourceName) always take precedence on key collision."
+  type        = map(string)
+  default     = {}
+}

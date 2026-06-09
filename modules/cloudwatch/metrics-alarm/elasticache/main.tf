@@ -1,0 +1,124 @@
+locals {
+  elasticache_resources = { for res in var.resources : res.name => res }
+
+  default_severities = {
+    cpu    = "ERROR"
+    memory = "ERROR"
+  }
+}
+
+#------------------------------------------------------------------------------
+# CPUUtilization Alarm
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "cpu" {
+  for_each = {
+    for k, v in local.elasticache_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "cpu")
+  }
+
+  alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-CPUUtilization"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-ElastiCache-[${each.value.name}]-CPUUtilization is in ALARM state"
+  )}"
+
+  namespace           = "AWS/ElastiCache"
+  metric_name         = "CPUUtilization"
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.cpu_threshold, null),
+    var.default_cpu_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    CacheClusterId = each.value.name
+  }
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.cpu
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.cpu
+    )]
+  ] : []
+
+  treat_missing_data = "notBreaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "ElastiCache"
+      ResourceName = each.value.name
+    }
+  )
+}
+
+#------------------------------------------------------------------------------
+# DatabaseMemoryUsagePercentage Alarm
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "memory" {
+  for_each = {
+    for k, v in local.elasticache_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "memory")
+  }
+
+  alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-DatabaseMemoryUsagePercentage"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.memory)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-ElastiCache-[${each.value.name}]-DatabaseMemoryUsagePercentage is in ALARM state"
+  )}"
+
+  namespace           = "AWS/ElastiCache"
+  metric_name         = "DatabaseMemoryUsagePercentage"
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.memory_threshold, null),
+    var.default_memory_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    CacheClusterId = each.value.name
+  }
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.memory
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.memory
+    )]
+  ] : []
+
+  treat_missing_data = "notBreaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "ElastiCache"
+      ResourceName = each.value.name
+    }
+  )
+}

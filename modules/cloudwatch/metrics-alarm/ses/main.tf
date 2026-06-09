@@ -1,0 +1,61 @@
+locals {
+  ses_resources = { for res in var.resources : res.name => res }
+
+  default_severities = {
+    bounce_rate = "WARN"
+  }
+}
+
+#------------------------------------------------------------------------------
+# Reputation.BounceRate Alarm
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
+  for_each = {
+    for k, v in local.ses_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "bounce_rate")
+  }
+
+  alarm_name = "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.bounce_rate)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate is in ALARM state"
+  )}"
+
+  namespace           = "AWS/SES"
+  metric_name         = "Reputation.BounceRate"
+  statistic           = "Average"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.bounce_rate_threshold, null),
+    var.default_bounce_rate_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.bounce_rate
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.bounce_rate
+    )]
+  ] : []
+
+  treat_missing_data = "notBreaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "SES"
+      ResourceName = each.value.name
+    }
+  )
+}
