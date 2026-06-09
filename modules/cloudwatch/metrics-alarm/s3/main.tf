@@ -95,8 +95,9 @@ resource "aws_cloudwatch_metric_alarm" "replication_failed" {
   period              = 60
 
   dimensions = {
-    SourceBucket = each.value.name
-    RuleId       = "EntireBucket"
+    SourceBucket      = each.value.name
+    DestinationBucket = each.value.overrides.replication_destination_bucket
+    RuleId            = coalesce(try(each.value.overrides.replication_rule_id, null), "EntireBucket")
   }
 
   alarm_actions = each.value.enabled ? [

@@ -55,10 +55,12 @@ Three severity levels (WARN / ERROR / CRIT) map to distinct SNS topic ARNs via `
 
 ### Special Module Behaviors
 
+- **ALB**: Requires `target_groups` (target group names) per resource — UnHealthyHostCount is only published per `(TargetGroup, LoadBalancer)`, so that alarm fans out to one per ALB/target-group pair (keyed `"<alb>:<tg>"`). Omitting `target_groups` is only valid when `unhealthy_host` is in `disabled_alarms`.
 - **EC2**: Looks up instance IDs via `data.aws_instance` (Name tag). Memory alarm uses CWAgent namespace — requires CloudWatch Agent installed. A `check {}` block warns at plan time if the Name tag matches zero or multiple instances.
-- **RDS**: Uses a flat `resources` list with `is_cluster` and `serverless` flags per entry. For clusters, it expands cluster members via `data.aws_rds_cluster`. FreeableMemory and DatabaseConnections thresholds are auto-calculated from instance class RAM using `instance_memory_map`. Aurora Serverless v2 resources set `serverless = true` to get ACUUtilization and ServerlessDatabaseCapacity alarms.
+- **RDS**: Uses a flat `resources` list with `is_cluster` and `serverless` flags per entry. For clusters, it expands cluster members via `data.aws_rds_cluster`. FreeableMemory and DatabaseConnections thresholds are auto-calculated from instance class RAM using `instance_memory_map`. Aurora Serverless v2 resources set `serverless = true` to get ACUUtilization and ServerlessDatabaseCapacity alarms. Two alarms are engine-gated via the `data.aws_db_instance` engine: FreeStorageSpace is created only for non-Aurora engines, EngineUptime only for Aurora (each is missing-data=breaching and would be permanently in ALARM on the wrong engine).
+- **S3**: The OperationsFailedReplication alarm (gated by `overrides.replication_enabled`) also requires `overrides.replication_destination_bucket`; `overrides.replication_rule_id` defaults to `"EntireBucket"`. The metric only exists per `(SourceBucket, DestinationBucket, RuleId)`.
 - **ASG**: Requires `desired_capacity` per resource (used to compute the capacity threshold).
-- **Lambda**: Requires `timeout_ms` per resource (used to compute the duration threshold). Account-level concurrency alarm is created once, not per-function.
+- **Lambda**: Requires `timeout_ms` per resource (used to compute the duration threshold; Errors and Throttles alarms use `default_errors_threshold`/`default_throttles_threshold`, both 1). Account-level concurrency alarm is created once, not per-function.
 - **CloudFront**: Uses `distribution_id` as the primary key (with optional `name` for alarm naming).
 
 ### Preflight Checks

@@ -296,9 +296,13 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "free_storage" {
+  # Aurora engines do not publish FreeStorageSpace (they emit FreeLocalStorage /
+  # cluster volume metrics); with treat_missing_data = "breaching" this alarm
+  # would sit permanently in ALARM on Aurora members, so gate it to non-Aurora.
   for_each = {
     for k, v in local.all_instances : k => v
     if !contains(try(v.overrides.disabled_alarms, []), "free_storage")
+    && !startswith(data.aws_db_instance.this[k].engine, "aurora")
   }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-FreeStorageSpace"
@@ -355,9 +359,13 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
+  # EngineUptime is an Aurora-only metric; with treat_missing_data = "breaching"
+  # this alarm would sit permanently in ALARM (at CRIT) on non-Aurora instances,
+  # so gate it to Aurora engines.
   for_each = {
     for k, v in local.all_instances : k => v
     if !contains(try(v.overrides.disabled_alarms, []), "engine_uptime")
+    && startswith(data.aws_db_instance.this[k].engine, "aurora")
   }
 
   alarm_name = "${var.project}-RDS-[${each.key}]-EngineUptime"

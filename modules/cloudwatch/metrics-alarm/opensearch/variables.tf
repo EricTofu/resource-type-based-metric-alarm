@@ -61,10 +61,10 @@ variable "resources" {
     condition = alltrue([
       for r in var.resources : alltrue([
         for m in try(r.overrides.disabled_alarms, []) :
-        contains(["cpu", "jvm_memory", "old_gen_jvm", "free_storage"], m)
+        contains(["cpu", "jvm_memory", "old_gen_jvm_memory", "free_storage"], m)
       ])
     ])
-    error_message = "overrides.disabled_alarms entries must be a subset of: cpu, jvm_memory, old_gen_jvm, free_storage"
+    error_message = "overrides.disabled_alarms entries must be a subset of: cpu, jvm_memory, old_gen_jvm_memory, free_storage"
   }
 
 }

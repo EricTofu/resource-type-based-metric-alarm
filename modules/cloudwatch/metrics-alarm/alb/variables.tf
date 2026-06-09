@@ -6,8 +6,9 @@ variable "project" {
 variable "resources" {
   description = "List of ALB resources to monitor"
   type = list(object({
-    name    = string
-    enabled = optional(bool, true)
+    name          = string
+    enabled       = optional(bool, true)
+    target_groups = optional(list(string), [])
     overrides = optional(object({
       severity                       = optional(string)
       description                    = optional(string)
@@ -18,6 +19,15 @@ variable "resources" {
       disabled_alarms                = optional(set(string), [])
     }), {})
   }))
+  validation {
+    # UnHealthyHostCount only exists per (TargetGroup, LoadBalancer) — a
+    # LoadBalancer-only alarm matches no metric and silently never fires.
+    condition = alltrue([
+      for r in var.resources :
+      length(r.target_groups) > 0 || contains(try(r.overrides.disabled_alarms, []), "unhealthy_host")
+    ])
+    error_message = "Each ALB resource must list its target_groups (target group names) for the UnHealthyHostCount alarm, or opt out via overrides.disabled_alarms = [\"unhealthy_host\"]."
+  }
   validation {
     condition = alltrue([
       for r in var.resources :

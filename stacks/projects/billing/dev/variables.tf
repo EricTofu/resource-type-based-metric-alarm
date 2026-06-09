@@ -49,7 +49,8 @@ variable "lambda_concurrency_alarm_enabled" {
 variable "alb_resources" {
   description = "ALB resources to monitor."
   type = list(object({
-    name = string
+    name          = string
+    target_groups = optional(list(string), [])
     overrides = optional(object({
       severity                       = optional(string)
       description                    = optional(string)
@@ -116,6 +117,8 @@ variable "lambda_resources" {
       severity              = optional(string)
       description           = optional(string)
       duration_threshold_ms = optional(number)
+      errors_threshold      = optional(number)
+      throttles_threshold   = optional(number)
       disabled_alarms       = optional(set(string), [])
     }), {})
   }))
@@ -151,11 +154,13 @@ variable "s3_resources" {
   type = list(object({
     name = string
     overrides = optional(object({
-      severity            = optional(string)
-      description         = optional(string)
-      error_5xx_threshold = optional(number)
-      replication_enabled = optional(bool)
-      disabled_alarms     = optional(set(string), [])
+      severity                       = optional(string)
+      description                    = optional(string)
+      error_5xx_threshold            = optional(number)
+      replication_enabled            = optional(bool)
+      replication_destination_bucket = optional(string)
+      replication_rule_id            = optional(string)
+      disabled_alarms                = optional(set(string), [])
     }), {})
   }))
   default = []
@@ -211,6 +216,7 @@ variable "cloudfront_resources" {
   description = "CloudFront distributions to monitor."
   type = list(object({
     distribution_id = string
+    name            = optional(string) # Friendly name for alarm naming
     overrides = optional(object({
       severity                 = optional(string)
       description              = optional(string)

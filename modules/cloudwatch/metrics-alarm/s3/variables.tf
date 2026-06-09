@@ -9,13 +9,26 @@ variable "resources" {
     name    = string
     enabled = optional(bool, true)
     overrides = optional(object({
-      severity            = optional(string)
-      description         = optional(string)
-      error_5xx_threshold = optional(number)
-      replication_enabled = optional(bool)
-      disabled_alarms     = optional(set(string), [])
+      severity                       = optional(string)
+      description                    = optional(string)
+      error_5xx_threshold            = optional(number)
+      replication_enabled            = optional(bool)
+      replication_destination_bucket = optional(string)
+      replication_rule_id            = optional(string)
+      disabled_alarms                = optional(set(string), [])
     }), {})
   }))
+  validation {
+    # OperationsFailedReplication is published per (SourceBucket,
+    # DestinationBucket, RuleId) — without the destination the alarm
+    # matches no metric and silently never fires.
+    condition = alltrue([
+      for r in var.resources :
+      !try(r.overrides.replication_enabled, false)
+      || try(r.overrides.replication_destination_bucket, null) != null
+    ])
+    error_message = "overrides.replication_destination_bucket is required when replication_enabled = true."
+  }
   validation {
     condition = alltrue([
       for r in var.resources :

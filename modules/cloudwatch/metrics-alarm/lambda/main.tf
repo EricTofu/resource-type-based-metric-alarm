@@ -3,8 +3,126 @@ locals {
 
   default_severities = {
     duration    = "WARN"
+    errors      = "ERROR"
+    throttles   = "WARN"
     concurrency = "WARN"
   }
+}
+
+#------------------------------------------------------------------------------
+# Errors Alarm
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "errors" {
+  for_each = {
+    for k, v in local.lambda_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "errors")
+  }
+
+  alarm_name = "${var.project}-Lambda-[${each.value.name}]-Errors"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.errors)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-Lambda-[${each.value.name}]-Errors is in ALARM state"
+  )}"
+
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.errors_threshold, null),
+    var.default_errors_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    FunctionName = each.value.name
+  }
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.errors
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.errors
+    )]
+  ] : []
+
+  treat_missing_data = "notBreaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "Lambda"
+      ResourceName = each.value.name
+    }
+  )
+}
+
+#------------------------------------------------------------------------------
+# Throttles Alarm
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "throttles" {
+  for_each = {
+    for k, v in local.lambda_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "throttles")
+  }
+
+  alarm_name = "${var.project}-Lambda-[${each.value.name}]-Throttles"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.throttles)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${var.project}-Lambda-[${each.value.name}]-Throttles is in ALARM state"
+  )}"
+
+  namespace           = "AWS/Lambda"
+  metric_name         = "Throttles"
+  statistic           = "Sum"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.throttles_threshold, null),
+    var.default_throttles_threshold
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+  period              = 60
+
+  dimensions = {
+    FunctionName = each.value.name
+  }
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.throttles
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.throttles
+    )]
+  ] : []
+
+  treat_missing_data = "notBreaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "Lambda"
+      ResourceName = each.value.name
+    }
+  )
 }
 
 #------------------------------------------------------------------------------

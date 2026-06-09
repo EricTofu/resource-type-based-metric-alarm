@@ -2,10 +2,10 @@ locals {
   opensearch_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
-    cpu          = "ERROR"
-    jvm_memory   = "ERROR"
-    old_gen_jvm  = "ERROR"
-    free_storage = "WARN"
+    cpu                = "ERROR"
+    jvm_memory         = "ERROR"
+    old_gen_jvm_memory = "ERROR"
+    free_storage       = "WARN"
   }
 }
 
@@ -134,11 +134,11 @@ resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
 resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
   for_each = {
     for k, v in local.opensearch_resources : k => v
-    if !contains(try(v.overrides.disabled_alarms, []), "old_gen_jvm")
+    if !contains(try(v.overrides.disabled_alarms, []), "old_gen_jvm_memory")
   }
 
   alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.old_gen_jvm)}]-${coalesce(
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.old_gen_jvm_memory)}]-${coalesce(
     try(each.value.overrides.description, null),
     "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure is in ALARM state"
   )}"
@@ -163,14 +163,14 @@ resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
   alarm_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
-      local.default_severities.old_gen_jvm
+      local.default_severities.old_gen_jvm_memory
     )]
   ] : []
 
   ok_actions = each.value.enabled ? [
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
-      local.default_severities.old_gen_jvm
+      local.default_severities.old_gen_jvm_memory
     )]
   ] : []
 

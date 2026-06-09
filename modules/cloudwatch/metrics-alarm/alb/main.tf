@@ -2,6 +2,18 @@ locals {
   # Flatten resources for for_each
   alb_resources = { for res in var.resources : res.name => res }
 
+  # UnHealthyHostCount is only published per (TargetGroup, LoadBalancer),
+  # so that alarm fans out to one per ALB/target-group pair.
+  alb_tg_pairs = merge([
+    for alb_key, alb in local.alb_resources : {
+      for tg in alb.target_groups : "${alb_key}:${tg}" => {
+        alb_key = alb_key
+        alb     = alb
+        tg      = tg
+      }
+    } if !contains(try(alb.overrides.disabled_alarms, []), "unhealthy_host")
+  ]...)
+
   # Default severities per metric
   default_severities = {
     elb_5xx              = "WARN"
@@ -18,6 +30,11 @@ locals {
 data "aws_lb" "this" {
   for_each = local.alb_resources
   name     = each.value.name
+}
+
+data "aws_lb_target_group" "this" {
+  for_each = local.alb_tg_pairs
+  name     = each.value.tg
 }
 
 #------------------------------------------------------------------------------
@@ -141,15 +158,12 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
-  for_each = {
-    for k, v in local.alb_resources : k => v
-    if !contains(try(v.overrides.disabled_alarms, []), "unhealthy_host")
-  }
+  for_each = local.alb_tg_pairs
 
-  alarm_name = "${var.project}-ALB-[${each.value.name}]-UnHealthyHostCount"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.unhealthy_host)}]-${coalesce(
-    try(each.value.overrides.description, null),
-    "${var.project}-ALB-[${each.value.name}]-UnHealthyHostCount is in ALARM state"
+  alarm_name = "${var.project}-ALB-[${each.value.alb.name}/${each.value.tg}]-UnHealthyHostCount"
+  alarm_description = "[${coalesce(try(each.value.alb.overrides.severity, null), local.default_severities.unhealthy_host)}]-${coalesce(
+    try(each.value.alb.overrides.description, null),
+    "${var.project}-ALB-[${each.value.alb.name}/${each.value.tg}]-UnHealthyHostCount is in ALARM state"
   )}"
 
   namespace           = "AWS/ApplicationELB"
@@ -157,7 +171,7 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
   statistic           = "Minimum"
   comparison_operator = "GreaterThanThreshold"
   threshold = coalesce(
-    try(each.value.overrides.unhealthy_host_threshold, null),
+    try(each.value.alb.overrides.unhealthy_host_threshold, null),
     var.default_unhealthy_host_threshold
   )
   evaluation_periods  = 5
@@ -165,19 +179,20 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
   period              = 60
 
   dimensions = {
-    LoadBalancer = data.aws_lb.this[each.key].arn_suffix
+    LoadBalancer = data.aws_lb.this[each.value.alb_key].arn_suffix
+    TargetGroup  = data.aws_lb_target_group.this[each.key].arn_suffix
   }
 
-  alarm_actions = each.value.enabled ? [
+  alarm_actions = each.value.alb.enabled ? [
     var.sns_topic_arns[coalesce(
-      try(each.value.overrides.severity, null),
+      try(each.value.alb.overrides.severity, null),
       local.default_severities.unhealthy_host
     )]
   ] : []
 
-  ok_actions = each.value.enabled ? [
+  ok_actions = each.value.alb.enabled ? [
     var.sns_topic_arns[coalesce(
-      try(each.value.overrides.severity, null),
+      try(each.value.alb.overrides.severity, null),
       local.default_severities.unhealthy_host
     )]
   ] : []
@@ -189,7 +204,8 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
     {
       Project      = var.project
       ResourceType = "ALB"
-      ResourceName = each.value.name
+      ResourceName = each.value.alb.name
+      TargetGroup  = each.value.tg
     }
   )
 }

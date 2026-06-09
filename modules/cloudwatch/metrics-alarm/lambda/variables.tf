@@ -13,6 +13,8 @@ variable "resources" {
       severity              = optional(string)
       description           = optional(string)
       duration_threshold_ms = optional(number)
+      errors_threshold      = optional(number)
+      throttles_threshold   = optional(number)
       disabled_alarms       = optional(set(string), [])
     }), {})
   }))
@@ -33,12 +35,26 @@ variable "resources" {
   }
   validation {
     condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.errors_threshold, null) == null || coalesce(try(r.overrides.errors_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.errors_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.throttles_threshold, null) == null || coalesce(try(r.overrides.throttles_threshold, null), 0) >= 0
+    ])
+    error_message = "overrides.throttles_threshold must be non-negative or omitted."
+  }
+  validation {
+    condition = alltrue([
       for r in var.resources : alltrue([
         for m in try(r.overrides.disabled_alarms, []) :
-        contains(["duration"], m)
+        contains(["duration", "errors", "throttles"], m)
       ])
     ])
-    error_message = "overrides.disabled_alarms entries must be a subset of: duration"
+    error_message = "overrides.disabled_alarms entries must be a subset of: duration, errors, throttles"
   }
 
 }
@@ -58,6 +74,18 @@ variable "sns_topic_arns" {
     error_message = "sns_topic_arns values must be SNS ARNs (starting with arn:aws:sns:)."
   }
 
+}
+
+variable "default_errors_threshold" {
+  description = "Default threshold for Errors (sum per period)"
+  type        = number
+  default     = 1
+}
+
+variable "default_throttles_threshold" {
+  description = "Default threshold for Throttles (sum per period)"
+  type        = number
+  default     = 1
 }
 
 variable "concurrency_threshold" {

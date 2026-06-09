@@ -17,6 +17,9 @@ common_tags = {
 alb_resources = [
   # {
   #   name = "billing-alb"
+  #   # Target group names — required for the UnHealthyHostCount alarm unless
+  #   # it is opted out via disabled_alarms.
+  #   target_groups = ["billing-alb-tg"]
   #   overrides = {
   #     # Skip specific metric alarms for this resource (opt-out; default = all on).
   #     # Valid ALB IDs: elb_5xx, target_5xx, unhealthy_host
