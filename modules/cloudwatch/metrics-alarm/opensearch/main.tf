@@ -1,4 +1,5 @@
 locals {
+  name_prefix          = "${var.project}-${var.env}-OpenSearch"
   opensearch_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
@@ -19,10 +20,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     if !contains(try(v.overrides.disabled_alarms, []), "cpu")
   }
 
-  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-CPUUtilization"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-[${each.value.name}]-CPUUtilization is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-CPUUtilization is in ALARM state"
   )}"
 
   namespace           = "AWS/ES"
@@ -78,10 +79,10 @@ resource "aws_cloudwatch_metric_alarm" "jvm_memory" {
     if !contains(try(v.overrides.disabled_alarms, []), "jvm_memory")
   }
 
-  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-JVMMemoryPressure"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-JVMMemoryPressure"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.jvm_memory)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-[${each.value.name}]-JVMMemoryPressure is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-JVMMemoryPressure is in ALARM state"
   )}"
 
   namespace           = "AWS/ES"
@@ -137,10 +138,10 @@ resource "aws_cloudwatch_metric_alarm" "old_gen_jvm_memory" {
     if !contains(try(v.overrides.disabled_alarms, []), "old_gen_jvm_memory")
   }
 
-  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-OldGenJVMMemoryPressure"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.old_gen_jvm_memory)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-[${each.value.name}]-OldGenJVMMemoryPressure is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-OldGenJVMMemoryPressure is in ALARM state"
   )}"
 
   namespace           = "AWS/ES"
@@ -196,10 +197,10 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
     if !contains(try(v.overrides.disabled_alarms, []), "free_storage")
   }
 
-  alarm_name = "${var.project}-OpenSearch-[${each.value.name}]-FreeStorageSpace"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-FreeStorageSpace"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.free_storage)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-OpenSearch-[${each.value.name}]-FreeStorageSpace is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-FreeStorageSpace is in ALARM state"
   )}"
 
   namespace           = "AWS/ES"

@@ -1,4 +1,5 @@
 locals {
+  name_prefix = "${var.project}-${var.env}-ALB"
   # Flatten resources for for_each
   alb_resources = { for res in var.resources : res.name => res }
 
@@ -47,10 +48,10 @@ resource "aws_cloudwatch_metric_alarm" "elb_5xx" {
     if !contains(try(v.overrides.disabled_alarms, []), "elb_5xx")
   }
 
-  alarm_name = "${var.project}-ALB-[${each.value.name}]-HTTPCode_ELB_5XX_Count"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-HTTPCode_ELB_5XX_Count"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.elb_5xx)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ALB-[${each.value.name}]-HTTPCode_ELB_5XX_Count is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-HTTPCode_ELB_5XX_Count is in ALARM state"
   )}"
 
   namespace           = "AWS/ApplicationELB"
@@ -105,10 +106,10 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
     if !contains(try(v.overrides.disabled_alarms, []), "target_5xx")
   }
 
-  alarm_name = "${var.project}-ALB-[${each.value.name}]-HTTPCode_Target_5XX_Count"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-HTTPCode_Target_5XX_Count"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.target_5xx)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ALB-[${each.value.name}]-HTTPCode_Target_5XX_Count is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-HTTPCode_Target_5XX_Count is in ALARM state"
   )}"
 
   namespace           = "AWS/ApplicationELB"
@@ -160,10 +161,10 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
 resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
   for_each = local.alb_tg_pairs
 
-  alarm_name = "${var.project}-ALB-[${each.value.alb.name}/${each.value.tg}]-UnHealthyHostCount"
+  alarm_name = "${local.name_prefix}-[${each.value.alb.name}/${each.value.tg}]-UnHealthyHostCount"
   alarm_description = "[${coalesce(try(each.value.alb.overrides.severity, null), local.default_severities.unhealthy_host)}]-${coalesce(
     try(each.value.alb.overrides.description, null),
-    "${var.project}-ALB-[${each.value.alb.name}/${each.value.tg}]-UnHealthyHostCount is in ALARM state"
+    "${local.name_prefix}-[${each.value.alb.name}/${each.value.tg}]-UnHealthyHostCount is in ALARM state"
   )}"
 
   namespace           = "AWS/ApplicationELB"
@@ -217,10 +218,10 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_host" {
 # resource "aws_cloudwatch_metric_alarm" "target_response_time" {
 #   for_each = local.alb_resources
 #
-#   alarm_name = "${var.project}-ALB-[${each.value.name}]-TargetResponseTime"
+#   alarm_name = "${local.name_prefix}-[${each.value.name}]-TargetResponseTime"
 #   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.target_response_time)}]-${coalesce(
 #     try(each.value.overrides.description, null),
-#     "${var.project}-ALB-[${each.value.name}]-TargetResponseTime is in ALARM state"
+#     "${local.name_prefix}-[${each.value.name}]-TargetResponseTime is in ALARM state"
 #   )}"
 #
 #   namespace           = "AWS/ApplicationELB"

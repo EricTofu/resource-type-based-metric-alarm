@@ -1,4 +1,5 @@
 locals {
+  name_prefix          = "${var.project}-${var.env}-RDS"
   cluster_resources    = { for res in var.resources : res.name => res if res.is_cluster }
   standalone_resources = { for res in var.resources : res.name => res if !res.is_cluster }
 
@@ -113,10 +114,10 @@ resource "aws_cloudwatch_metric_alarm" "freeable_memory" {
     if !contains(try(v.overrides.disabled_alarms, []), "freeable_memory")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-FreeableMemory"
+  alarm_name = "${local.name_prefix}-[${each.key}]-FreeableMemory"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.freeable_memory)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-FreeableMemory is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-FreeableMemory is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -175,10 +176,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     if !contains(try(v.overrides.disabled_alarms, []), "cpu")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-CPUUtilization"
+  alarm_name = "${local.name_prefix}-[${each.key}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-CPUUtilization is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-CPUUtilization is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -234,10 +235,10 @@ resource "aws_cloudwatch_metric_alarm" "database_connections" {
     if !contains(try(v.overrides.disabled_alarms, []), "database_connections")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-DatabaseConnections"
+  alarm_name = "${local.name_prefix}-[${each.key}]-DatabaseConnections"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.database_connections)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-DatabaseConnections is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-DatabaseConnections is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -305,10 +306,10 @@ resource "aws_cloudwatch_metric_alarm" "free_storage" {
     && !startswith(data.aws_db_instance.this[k].engine, "aurora")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-FreeStorageSpace"
+  alarm_name = "${local.name_prefix}-[${each.key}]-FreeStorageSpace"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.free_storage)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-FreeStorageSpace is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-FreeStorageSpace is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -368,10 +369,10 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
     && startswith(data.aws_db_instance.this[k].engine, "aurora")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-EngineUptime"
+  alarm_name = "${local.name_prefix}-[${each.key}]-EngineUptime"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.engine_uptime)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-EngineUptime is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-EngineUptime is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -421,10 +422,10 @@ resource "aws_cloudwatch_metric_alarm" "engine_uptime" {
 # resource "aws_cloudwatch_metric_alarm" "volume_bytes_used" {
 #   for_each = local.cluster_resources
 #
-#   alarm_name = "${var.project}-RDS-[${each.key}]-VolumeBytesUsed"
+#   alarm_name = "${local.name_prefix}-[${each.key}]-VolumeBytesUsed"
 #   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.volume_bytes_used)}]-${coalesce(
 #     try(each.value.overrides.description, null),
-#     "${var.project}-RDS-[${each.key}]-VolumeBytesUsed is in ALARM state"
+#     "${local.name_prefix}-[${each.key}]-VolumeBytesUsed is in ALARM state"
 #   )}"
 #
 #   namespace           = "AWS/RDS"
@@ -479,10 +480,10 @@ resource "aws_cloudwatch_metric_alarm" "read_latency" {
     if !contains(try(v.overrides.disabled_alarms, []), "read_latency")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-ReadLatency"
+  alarm_name = "${local.name_prefix}-[${each.key}]-ReadLatency"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.read_latency)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-ReadLatency is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-ReadLatency is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -538,10 +539,10 @@ resource "aws_cloudwatch_metric_alarm" "write_latency" {
     if !contains(try(v.overrides.disabled_alarms, []), "write_latency")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-WriteLatency"
+  alarm_name = "${local.name_prefix}-[${each.key}]-WriteLatency"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.write_latency)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-WriteLatency is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-WriteLatency is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -597,10 +598,10 @@ resource "aws_cloudwatch_metric_alarm" "acu_utilization" {
     if v.serverless && !contains(try(v.overrides.disabled_alarms, []), "acu_utilization")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-ACUUtilization"
+  alarm_name = "${local.name_prefix}-[${each.key}]-ACUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.acu_utilization)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-ACUUtilization is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-ACUUtilization is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"
@@ -656,10 +657,10 @@ resource "aws_cloudwatch_metric_alarm" "serverless_capacity" {
     if v.serverless && !contains(try(v.overrides.disabled_alarms, []), "serverless_capacity")
   }
 
-  alarm_name = "${var.project}-RDS-[${each.key}]-ServerlessDatabaseCapacity"
+  alarm_name = "${local.name_prefix}-[${each.key}]-ServerlessDatabaseCapacity"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.serverless_capacity)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-RDS-[${each.key}]-ServerlessDatabaseCapacity is in ALARM state"
+    "${local.name_prefix}-[${each.key}]-ServerlessDatabaseCapacity is in ALARM state"
   )}"
 
   namespace           = "AWS/RDS"

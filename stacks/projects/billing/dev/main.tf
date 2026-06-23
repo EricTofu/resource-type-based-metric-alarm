@@ -3,6 +3,7 @@ module "alb_alarms" {
   count  = length(var.alb_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.alb_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -13,6 +14,7 @@ module "apigateway_alarms" {
   count  = length(var.apigateway_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.apigateway_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -23,6 +25,7 @@ module "ec2_alarms" {
   count  = length(var.ec2_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.ec2_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -33,6 +36,7 @@ module "asg_alarms" {
   count  = length(var.asg_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.asg_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -43,6 +47,7 @@ module "lambda_alarms" {
   count  = length(var.lambda_resources) > 0 ? 1 : 0
 
   project                   = var.project
+  env                       = var.env
   resources                 = var.lambda_resources
   sns_topic_arns            = local.sns_topic_arns
   common_tags               = var.common_tags
@@ -55,6 +60,7 @@ module "rds_alarms" {
   count  = length(var.rds_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.rds_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -65,6 +71,7 @@ module "s3_alarms" {
   count  = length(var.s3_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.s3_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -75,6 +82,7 @@ module "elasticache_alarms" {
   count  = length(var.elasticache_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.elasticache_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -85,6 +93,7 @@ module "opensearch_alarms" {
   count  = length(var.opensearch_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.opensearch_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -95,6 +104,7 @@ module "ses_alarms" {
   count  = length(var.ses_resources) > 0 ? 1 : 0
 
   project        = var.project
+  env            = var.env
   resources      = var.ses_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
@@ -108,6 +118,7 @@ module "cloudfront_alarms" {
   }
 
   project        = var.project
+  env            = var.env
   resources      = var.cloudfront_resources
   sns_topic_arns = local.sns_topic_arns_global
   common_tags    = var.common_tags

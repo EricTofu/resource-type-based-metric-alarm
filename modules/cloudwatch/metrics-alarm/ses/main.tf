@@ -1,4 +1,5 @@
 locals {
+  name_prefix   = "${var.project}-${var.env}-SES"
   ses_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
@@ -16,10 +17,10 @@ resource "aws_cloudwatch_metric_alarm" "bounce_rate" {
     if !contains(try(v.overrides.disabled_alarms, []), "bounce_rate")
   }
 
-  alarm_name = "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-Reputation.BounceRate"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.bounce_rate)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-SES-[${each.value.name}]-Reputation.BounceRate is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-Reputation.BounceRate is in ALARM state"
   )}"
 
   namespace           = "AWS/SES"

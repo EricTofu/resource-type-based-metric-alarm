@@ -1,4 +1,5 @@
 locals {
+  name_prefix   = "${var.project}-${var.env}-EC2"
   ec2_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
@@ -60,10 +61,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
     if !contains(try(v.overrides.disabled_alarms, []), "status_check")
   }
 
-  alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-StatusCheckFailed"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.status_check)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-StatusCheckFailed is in ALARM state"
   )}"
 
   namespace           = "AWS/EC2"
@@ -115,10 +116,10 @@ resource "aws_cloudwatch_metric_alarm" "status_check_ebs" {
     if !contains(try(v.overrides.disabled_alarms, []), "status_check_ebs")
   }
 
-  alarm_name = "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed_AttachedEBS"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-StatusCheckFailed_AttachedEBS"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.status_check_ebs)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-[${each.value.name}]-StatusCheckFailed_AttachedEBS is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-StatusCheckFailed_AttachedEBS is in ALARM state"
   )}"
 
   namespace           = "AWS/EC2"
@@ -170,10 +171,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     if !contains(try(v.overrides.disabled_alarms, []), "cpu")
   }
 
-  alarm_name = "${var.project}-EC2-[${each.value.name}]-CPUUtilization"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-[${each.value.name}]-CPUUtilization is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-CPUUtilization is in ALARM state"
   )}"
 
   namespace           = "AWS/EC2"
@@ -228,10 +229,10 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
     if !contains(try(v.overrides.disabled_alarms, []), "memory")
   }
 
-  alarm_name = "${var.project}-EC2-[${each.value.name}]-mem_used_percent"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-mem_used_percent"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.memory)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-EC2-[${each.value.name}]-mem_used_percent is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-mem_used_percent is in ALARM state"
   )}"
 
   namespace           = "CWAgent"

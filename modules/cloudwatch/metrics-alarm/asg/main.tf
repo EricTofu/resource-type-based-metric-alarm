@@ -1,4 +1,5 @@
 locals {
+  name_prefix   = "${var.project}-${var.env}-ASG"
   asg_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
@@ -16,10 +17,10 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
     if !contains(try(v.overrides.disabled_alarms, []), "in_service_capacity")
   }
 
-  alarm_name = "${var.project}-ASG-[${each.value.name}]-GroupInServiceCapacity"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-GroupInServiceCapacity"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.in_service_capacity)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ASG-[${each.value.name}]-GroupInServiceCapacity is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-GroupInServiceCapacity is in ALARM state"
   )}"
 
   namespace           = "AWS/AutoScaling"

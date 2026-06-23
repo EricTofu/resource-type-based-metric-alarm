@@ -1,4 +1,5 @@
 locals {
+  name_prefix  = "${var.project}-${var.env}-S3"
   s3_resources = { for res in var.resources : res.name => res }
 
   # Filter resources with replication enabled
@@ -23,10 +24,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
     if !contains(try(v.overrides.disabled_alarms, []), "error_5xx")
   }
 
-  alarm_name = "${var.project}-S3-[${each.value.name}]-5xxErrors"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-5xxErrors"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_5xx)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-S3-[${each.value.name}]-5xxErrors is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-5xxErrors is in ALARM state"
   )}"
 
   namespace           = "AWS/S3"
@@ -79,10 +80,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
 resource "aws_cloudwatch_metric_alarm" "replication_failed" {
   for_each = local.s3_replication_resources
 
-  alarm_name = "${var.project}-S3-[${each.value.name}]-OperationsFailedReplication"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-OperationsFailedReplication"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.replication_failed)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-S3-[${each.value.name}]-OperationsFailedReplication is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-OperationsFailedReplication is in ALARM state"
   )}"
 
   namespace           = "AWS/S3"

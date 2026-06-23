@@ -13,6 +13,7 @@ terraform {
 }
 
 locals {
+  name_prefix = "${var.project}-${var.env}-CloudFront"
   # Flatten resources for for_each
   cloudfront_resources = { for res in var.resources : res.distribution_id => res }
 
@@ -32,10 +33,10 @@ locals {
 # resource "aws_cloudwatch_metric_alarm" "error_4xx" {
 #   for_each = local.cloudfront_resources
 #
-#   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-4xxErrorRate"
+#   alarm_name = "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-4xxErrorRate"
 #   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_4xx)}]-${coalesce(
 #     try(each.value.overrides.description, null),
-#     "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-4xxErrorRate is in ALARM state"
+#     "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-4xxErrorRate is in ALARM state"
 #   )}"
 #
 #   namespace           = "AWS/CloudFront"
@@ -91,10 +92,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
     if !contains(try(v.overrides.disabled_alarms, []), "error_5xx")
   }
 
-  alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-5xxErrorRate"
+  alarm_name = "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-5xxErrorRate"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_5xx)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-5xxErrorRate is in ALARM state"
+    "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-5xxErrorRate is in ALARM state"
   )}"
 
   namespace           = "AWS/CloudFront"
@@ -150,10 +151,10 @@ resource "aws_cloudwatch_metric_alarm" "origin_latency" {
     if !contains(try(v.overrides.disabled_alarms, []), "origin_latency")
   }
 
-  alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-OriginLatency"
+  alarm_name = "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-OriginLatency"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.origin_latency)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-OriginLatency is in ALARM state"
+    "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-OriginLatency is in ALARM state"
   )}"
 
   namespace           = "AWS/CloudFront"
@@ -206,10 +207,10 @@ resource "aws_cloudwatch_metric_alarm" "origin_latency" {
 # resource "aws_cloudwatch_metric_alarm" "cache_hit_rate" {
 #   for_each = local.cloudfront_resources
 #
-#   alarm_name = "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-CacheHitRate"
+#   alarm_name = "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-CacheHitRate"
 #   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cache_hit_rate)}]-${coalesce(
 #     try(each.value.overrides.description, null),
-#     "${var.project}-CloudFront-[${coalesce(each.value.name, each.value.distribution_id)}]-CacheHitRate is in ALARM state"
+#     "${local.name_prefix}-[${coalesce(each.value.name, each.value.distribution_id)}]-CacheHitRate is in ALARM state"
 #   )}"
 #
 #   namespace           = "AWS/CloudFront"

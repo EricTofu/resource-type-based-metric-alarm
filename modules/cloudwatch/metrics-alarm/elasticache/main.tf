@@ -1,4 +1,5 @@
 locals {
+  name_prefix           = "${var.project}-${var.env}-ElastiCache"
   elasticache_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
@@ -17,10 +18,10 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
     if !contains(try(v.overrides.disabled_alarms, []), "cpu")
   }
 
-  alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-CPUUtilization"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-CPUUtilization"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.cpu)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ElastiCache-[${each.value.name}]-CPUUtilization is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-CPUUtilization is in ALARM state"
   )}"
 
   namespace           = "AWS/ElastiCache"
@@ -75,10 +76,10 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
     if !contains(try(v.overrides.disabled_alarms, []), "memory")
   }
 
-  alarm_name = "${var.project}-ElastiCache-[${each.value.name}]-DatabaseMemoryUsagePercentage"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-DatabaseMemoryUsagePercentage"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.memory)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-ElastiCache-[${each.value.name}]-DatabaseMemoryUsagePercentage is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-DatabaseMemoryUsagePercentage is in ALARM state"
   )}"
 
   namespace           = "AWS/ElastiCache"

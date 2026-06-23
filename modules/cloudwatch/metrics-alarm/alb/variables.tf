@@ -3,6 +3,11 @@ variable "project" {
   type        = string
 }
 
+variable "env" {
+  description = "Environment name (dev/stg/prod) for alarm naming"
+  type        = string
+}
+
 variable "resources" {
   description = "List of ALB resources to monitor"
   type = list(object({

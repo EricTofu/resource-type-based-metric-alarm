@@ -3,6 +3,11 @@ variable "project" {
   type        = string
 }
 
+variable "env" {
+  description = "Environment name (dev/stg/prod) for alarm naming"
+  type        = string
+}
+
 variable "resources" {
   description = "List of OpenSearch resources to monitor"
   type = list(object({

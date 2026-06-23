@@ -1,4 +1,5 @@
 locals {
+  name_prefix          = "${var.project}-${var.env}-APIGateway"
   apigateway_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
@@ -16,10 +17,10 @@ resource "aws_cloudwatch_metric_alarm" "error_5xx" {
     if !contains(try(v.overrides.disabled_alarms, []), "error_5xx")
   }
 
-  alarm_name = "${var.project}-APIGateway-[${each.value.name}]-5XXError"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-5XXError"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.error_5xx)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-APIGateway-[${each.value.name}]-5XXError is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-5XXError is in ALARM state"
   )}"
 
   namespace           = "AWS/ApiGateway"

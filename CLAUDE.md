@@ -32,7 +32,7 @@ This project creates CloudWatch metric alarms for 11 AWS resource types using a 
 ### Module Pattern
 
 Every library module follows the same structure:
-- `variables.tf`: accepts `project`, `resources`, `sns_topic_arns`, `common_tags`, and default threshold variables. All inputs have `validation {}` blocks.
+- `variables.tf`: accepts `project`, `env`, `resources`, `sns_topic_arns`, `common_tags`, and default threshold variables. All inputs have `validation {}` blocks.
 - `main.tf`: defines `locals` with a `default_severities` map (per-metric severity), data sources to resolve resource IDs from names, and one `aws_cloudwatch_metric_alarm` per metric
 - `outputs.tf`: exports `alarm_arns` and `alarm_names` maps keyed by `"<resource-key>:<metric-name>"`
 
@@ -42,7 +42,7 @@ Threshold resolution uses a `coalesce()` chain: per-resource override → calcul
 
 ### Alarm Naming & Description
 
-- Name: `{Project}-{ResourceType}-[{ResourceName}]-{MetricName}`
+- Name: `{Project}-{Env}-{ResourceType}-[{ResourceName}]-{MetricName}`. Project-first matches the `stacks/projects/<project>/<env>/` layout; env follows it (each env is its own account, so env is for cross-account dashboards / payloads, not in-account grouping). Each module builds `{Project}-{Env}-{ResourceType}` once as `local.name_prefix` (from `var.project` + `var.env`) and reuses it for both `alarm_name` and the description fallback — change the convention there, not per-alarm.
 - Description prefix: `[{SEVERITY}]-` followed by the description text
 
 ### Severity → SNS Routing

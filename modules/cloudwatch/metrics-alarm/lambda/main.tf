@@ -1,4 +1,5 @@
 locals {
+  name_prefix      = "${var.project}-${var.env}-Lambda"
   lambda_resources = { for res in var.resources : res.name => res }
 
   default_severities = {
@@ -19,10 +20,10 @@ resource "aws_cloudwatch_metric_alarm" "errors" {
     if !contains(try(v.overrides.disabled_alarms, []), "errors")
   }
 
-  alarm_name = "${var.project}-Lambda-[${each.value.name}]-Errors"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-Errors"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.errors)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-Lambda-[${each.value.name}]-Errors is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-Errors is in ALARM state"
   )}"
 
   namespace           = "AWS/Lambda"
@@ -77,10 +78,10 @@ resource "aws_cloudwatch_metric_alarm" "throttles" {
     if !contains(try(v.overrides.disabled_alarms, []), "throttles")
   }
 
-  alarm_name = "${var.project}-Lambda-[${each.value.name}]-Throttles"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-Throttles"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.throttles)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-Lambda-[${each.value.name}]-Throttles is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-Throttles is in ALARM state"
   )}"
 
   namespace           = "AWS/Lambda"
@@ -135,10 +136,10 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
     if !contains(try(v.overrides.disabled_alarms, []), "duration")
   }
 
-  alarm_name = "${var.project}-Lambda-[${each.value.name}]-Duration"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-Duration"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.duration)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${var.project}-Lambda-[${each.value.name}]-Duration is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-Duration is in ALARM state"
   )}"
 
   namespace           = "AWS/Lambda"
@@ -191,8 +192,8 @@ resource "aws_cloudwatch_metric_alarm" "duration" {
 resource "aws_cloudwatch_metric_alarm" "concurrency" {
   count = var.concurrency_alarm_enabled && length(var.resources) > 0 ? 1 : 0
 
-  alarm_name        = "${var.project}-Lambda-[Account]-ClaimedAccountConcurrency"
-  alarm_description = "[${local.default_severities.concurrency}]-${var.project}-Lambda-ClaimedAccountConcurrency is in ALARM state"
+  alarm_name        = "${local.name_prefix}-[Account]-ClaimedAccountConcurrency"
+  alarm_description = "[${local.default_severities.concurrency}]-${local.name_prefix}-ClaimedAccountConcurrency is in ALARM state"
 
   namespace           = "AWS/Lambda"
   metric_name         = "ClaimedAccountConcurrency"
