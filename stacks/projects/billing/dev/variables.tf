@@ -229,3 +229,21 @@ variable "cloudfront_resources" {
   }))
   default = []
 }
+
+variable "efs_resources" {
+  description = "EFS file systems to monitor."
+  type = list(object({
+    file_system_id = string
+    name           = optional(string)
+    enabled        = optional(bool, true)
+    overrides = optional(object({
+      severity                  = optional(string)
+      description               = optional(string)
+      throughput_util_threshold = optional(number)
+      period                    = optional(number)
+      evaluation_periods        = optional(number)
+      disabled_alarms           = optional(set(string), [])
+    }), {})
+  }))
+  default = []
+}

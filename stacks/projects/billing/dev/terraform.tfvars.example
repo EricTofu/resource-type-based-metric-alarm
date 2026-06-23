@@ -38,3 +38,12 @@ elasticache_resources = []
 opensearch_resources  = []
 ses_resources         = []
 cloudfront_resources  = []
+
+efs_resources = [
+  { file_system_id = "fs-0123456789abcdef0", name = "billing-shared-efs" },
+  {
+    file_system_id = "fs-0fedcba9876543210"
+    name           = "billing-reports-efs"
+    overrides      = { throughput_util_threshold = 70, evaluation_periods = 12, severity = "ERROR" }
+  },
+]

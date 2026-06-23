@@ -120,6 +120,20 @@ resources:
         cpu_threshold:    75
         memory_threshold: 80
 
+  # EFS throughput-utilization trend (metric-math alarm, default 6h-sustained >=80%).
+  # Identify by file_system_id (fs-xxxx); optional name is for alarm naming only.
+  efs:
+    - file_system_id: fs-0123456789abcdef0
+      name: billing-shared-efs
+    # widen the window and tighten the threshold for a busier file system
+    - file_system_id: fs-0fedcba9876543210
+      name: billing-reports-efs
+      overrides:
+        throughput_util_threshold: 70
+        period:             3600
+        evaluation_periods: 12      # 12h sustained
+        severity:           ERROR
+
   opensearch:
     - name: billing-search
       overrides:
