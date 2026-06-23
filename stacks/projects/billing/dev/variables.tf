@@ -247,3 +247,19 @@ variable "efs_resources" {
   }))
   default = []
 }
+
+variable "jmx_resources" {
+  description = "EC2 hosts (by Name tag) running a JMX-exposed Java app to monitor."
+  type = list(object({
+    name    = string
+    enabled = optional(bool, true)
+    overrides = optional(object({
+      severity             = optional(string)
+      description          = optional(string)
+      heap_threshold       = optional(number)
+      gc_time_threshold_ms = optional(number)
+      disabled_alarms      = optional(set(string), [])
+    }), {})
+  }))
+  default = []
+}

@@ -47,3 +47,11 @@ efs_resources = [
     overrides      = { throughput_util_threshold = 70, evaluation_periods = 12, severity = "ERROR" }
   },
 ]
+
+jmx_resources = [
+  { name = "billing-java-app-1" },
+  {
+    name      = "billing-java-app-2"
+    overrides = { heap_threshold = 90, gc_time_threshold_ms = 12000, severity = "ERROR" }
+  },
+]

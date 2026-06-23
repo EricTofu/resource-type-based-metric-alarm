@@ -134,3 +134,14 @@ module "efs_alarms" {
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
 }
+
+module "jmx_alarms" {
+  source = "../../../../modules/cloudwatch/metrics-alarm/jmx"
+  count  = length(var.jmx_resources) > 0 ? 1 : 0
+
+  project        = var.project
+  env            = var.env
+  resources      = var.jmx_resources
+  sns_topic_arns = local.sns_topic_arns
+  common_tags    = var.common_tags
+}
