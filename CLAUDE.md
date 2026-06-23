@@ -19,7 +19,7 @@ terraform init -backend=false && terraform validate
 
 ## Architecture
 
-This project creates CloudWatch metric alarms for 11 AWS resource types using a modular, DRY pattern split across three layers:
+This project creates CloudWatch metric alarms for 13 AWS resource types using a modular, DRY pattern split across three layers:
 
 1. **Library modules** (`modules/cloudwatch/metrics-alarm/<type>/`) — reusable alarm definitions, no state
 2. **Platform stacks** (`stacks/platform/<env>/`) — SNS topics per account, state in Ops bucket
@@ -32,7 +32,7 @@ This project creates CloudWatch metric alarms for 11 AWS resource types using a 
 ### Module Pattern
 
 Every library module follows the same structure:
-- `variables.tf`: accepts `project`, `env`, `resources`, `sns_topic_arns`, `common_tags`, and default threshold variables. All inputs have `validation {}` blocks.
+- `variables.tf`: accepts `project`, `env`, `resources`, `sns_topic_arns`, `common_tags`, and default threshold variables. The `resources` input (including per-resource `overrides`) and `sns_topic_arns` have `validation {}` blocks.
 - `main.tf`: defines `locals` with a `default_severities` map (per-metric severity), data sources to resolve resource IDs from names, and one `aws_cloudwatch_metric_alarm` per metric
 - `outputs.tf`: exports `alarm_arns` and `alarm_names` maps keyed by `"<resource-key>:<metric-name>"`
 
@@ -58,6 +58,12 @@ Three severity levels (WARN / ERROR / CRIT) map to distinct SNS topic ARNs via `
 - **ASG**: Requires `desired_capacity` per resource (used to compute the capacity threshold).
 - **Lambda**: Requires `timeout_ms` per resource (used to compute the duration threshold; Errors and Throttles alarms use `default_errors_threshold`/`default_throttles_threshold`, both 1). Account-level concurrency alarm is created once, not per-function.
 - **CloudFront**: Uses `distribution_id` as the primary key (with optional `name` for alarm naming).
+- **EFS**: Identified by `file_system_id` (`fs-xxxx`) directly — no Name-tag lookup (the AWS provider has no tag-filtered EFS data source). The single `throughput_util` alarm is the repo's only **metric-math** alarm: throughput utilization % = `Sum(MeteredIOBytes)/PERIOD ÷ Average(PermittedThroughput)`. Watched over a long span (default `period=3600` × `evaluation_periods=6` = 6h sustained ≥80%) to catch a creeping throughput-bottleneck trend rather than short spikes; `period`/`evaluation_periods`/`throughput_util_threshold` are overridable. `treat_missing_data="notBreaching"` (idle EFS must not alarm).
+- **JMX**: Heap/GC alarms for Java apps on EC2, by Name tag (same InstanceId lookup + `check {}` as EC2). Depends on the CloudWatch Agent JMX config in `cwagent/jmx/` (contract: namespace `CWAgent`, dimension `InstanceId`, OTel metric names `jvm.*`). `heap_used` = metric-math `100*used/max` (default 85%); `gc_time` = `DIFF(jvm.gc.collections.elapsed)` ms/min (default 6000). A JVM restart resets the GC counter → negative `DIFF` → never breaches.
+
+### Dashboards
+
+`modules/cloudwatch/dashboard/jmx/` builds a per-instance JVM dashboard via `jsonencode` and exposes the body as the `dashboard_json` output; `dashboards/jmx-jvm.json` is an importable one-instance snapshot of the same layout. The cwagent JMX config that feeds it lives in `cwagent/jmx/` (outside the alarm modules — this repo manages alarms/dashboards, not compute).
 
 ### Preflight Checks
 
