@@ -1,0 +1,55 @@
+{
+  "widgets": [
+    {
+      "type": "metric",
+      "x": 0, "y": 0, "width": 8, "height": 6,
+      "properties": {
+        "title": "java-app — Heap",
+        "region": "ap-northeast-1",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": 60,
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [ { "expression": "100*m1/m2", "label": "Heap used %", "id": "e1" } ],
+          [ "CWAgent", "jvm.memory.heap.used", "InstanceId", "i-PLACEHOLDER", { "id": "m1", "visible": false } ],
+          [ "CWAgent", "jvm.memory.heap.max", "InstanceId", "i-PLACEHOLDER", { "id": "m2", "visible": false } ],
+          [ "CWAgent", "jvm.memory.heap.committed", "InstanceId", "i-PLACEHOLDER", { "label": "Heap committed (bytes)", "yAxis": "right" } ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8, "y": 0, "width": 8, "height": 6,
+      "properties": {
+        "title": "java-app — GC time (ms/min)",
+        "region": "ap-northeast-1",
+        "view": "timeSeries",
+        "period": 60,
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [ { "expression": "DIFF(m1)", "label": "GC time ms/min", "id": "e1" } ],
+          [ "CWAgent", "jvm.gc.collections.elapsed", "InstanceId", "i-PLACEHOLDER", { "id": "m1", "stat": "Maximum", "visible": false } ],
+          [ { "expression": "DIFF(m2)", "label": "GC cycles/min", "id": "e2", "yAxis": "right" } ],
+          [ "CWAgent", "jvm.gc.collections.count", "InstanceId", "i-PLACEHOLDER", { "id": "m2", "stat": "Maximum", "visible": false } ]
+        ]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16, "y": 0, "width": 8, "height": 6,
+      "properties": {
+        "title": "java-app — Threads & classes",
+        "region": "ap-northeast-1",
+        "view": "timeSeries",
+        "stat": "Average",
+        "period": 60,
+        "yAxis": { "left": { "min": 0 } },
+        "metrics": [
+          [ "CWAgent", "jvm.threads.count", "InstanceId", "i-PLACEHOLDER", { "label": "Threads" } ],
+          [ "CWAgent", "jvm.classes.loaded", "InstanceId", "i-PLACEHOLDER", { "label": "Classes loaded", "yAxis": "right" } ]
+        ]
+      }
+    }
+  ]
+}
