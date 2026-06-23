@@ -1,0 +1,29 @@
+{
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": {
+      "InstanceId": "${aws:InstanceId}"
+    },
+    "aggregation_dimensions": [
+      ["InstanceId"]
+    ],
+    "metrics_collected": {
+      "jmx": [
+        {
+          "endpoint": "localhost:9999",
+          "jvm": {
+            "measurement": [
+              "jvm.memory.heap.used",
+              "jvm.memory.heap.committed",
+              "jvm.memory.heap.max",
+              "jvm.gc.collections.count",
+              "jvm.gc.collections.elapsed",
+              "jvm.threads.count",
+              "jvm.classes.loaded"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
