@@ -15,6 +15,9 @@ JVM dashboard depend on the contract below.
 ## Prerequisites
 
 - `amazon-cloudwatch-agent` with JMX support installed on the host.
+- The JVM runs with a **bounded heap** (`-Xmx`). Without it `jvm.memory.heap.max` is
+  reported as `-1`, which makes the heap alarm's `100*used/max` expression negative — it
+  would then never fire. A bounded heap is assumed.
 - The JVM exposes JMX on `localhost:9999`. For a local-only, unauthenticated endpoint,
   start the app with:
   `-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9999`
@@ -56,7 +59,33 @@ For fleet automation, push the config to instances tagged as Java hosts via an S
 association running `amazon-cloudwatch-agent-ctl ... -c ssm:<param>`. Not implemented
 here — left to host provisioning.
 
-## Verify metrics are flowing
+## Verify metrics are flowing (run on a live host before trusting the alarms)
+
+Heap is a single series per instance:
 
     aws cloudwatch list-metrics --namespace CWAgent \
       --metric-name jvm.memory.heap.used --dimensions Name=InstanceId,Value=<id>
+
+**GC needs an extra check.** The OpenTelemetry JMX `jvm` target emits
+`jvm.gc.collections.elapsed` / `.count` **once per garbage collector** (e.g. "G1 Young
+Generation", "G1 Old Generation"), so the raw series carry a `name` dimension in addition
+to `InstanceId`. The alarm and dashboard query `{InstanceId}` only and therefore rely on
+the `aggregation_dimensions: [["InstanceId"]]` rollup in the agent config. Confirm that
+rollup is actually published:
+
+    aws cloudwatch list-metrics --namespace CWAgent \
+      --metric-name jvm.gc.collections.elapsed
+
+- If you see a series with **only** an `InstanceId` dimension (no `name`), the rollup
+  exists and the `gc_time` alarm/dashboard will resolve.
+- On a **multi-collector** JVM, the rolled-up series with `stat=Maximum` (what the module
+  uses) reflects the single busiest collector, not total time-in-GC. If you need true
+  total GC time, switch the `gc_time` alarm's `m1` stat (and the dashboard's) from
+  `Maximum` to `Sum`. Single-collector JVMs are unaffected (Max == Sum).
+
+## Liveness is NOT covered by these alarms
+
+`heap_used`/`gc_time` use `treat_missing_data = "notBreaching"`, so a crashed JVM or a
+stopped agent (no JVM metrics → INSUFFICIENT_DATA) will **not** fire them. Pair the JMX
+alarms with the EC2 module's `status_check` alarm (missing-data = breaching) on the same
+host so a dead app/instance is still caught. Don't deploy JMX as the sole signal.

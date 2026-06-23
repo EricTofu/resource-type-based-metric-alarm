@@ -23,8 +23,8 @@ locals {
 #------------------------------------------------------------------------------
 # Throughput Utilization (%) — metric-math alarm.
 # Not a published metric: utilization = metered throughput / permitted throughput.
-#   metered MiBps  = Sum(MeteredIOBytes) / PERIOD
-#   permitted Bps  = Average(PermittedThroughput)
+#   metered bytes/s   = Sum(MeteredIOBytes) / PERIOD
+#   permitted bytes/s = Average(PermittedThroughput)   (already a bytes/second rate)
 # Watched over a long span (default 3600s x 6 = 6h sustained) to track the trend
 # rather than fire on short spikes.
 #------------------------------------------------------------------------------
