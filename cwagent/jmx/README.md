@@ -61,27 +61,30 @@ here — left to host provisioning.
 
 ## Verify metrics are flowing (run on a live host before trusting the alarms)
 
-Heap is a single series per instance:
+You should see **two** kinds of series per JVM metric: the fully-dimensioned one (carrying
+whatever you appended — `InstanceId`, `ProcessGroupName`, and optionally `ImageId`/
+`InstanceType`/`AutoScalingGroupName`) **and** a series with **only `InstanceId`** — the
+`aggregation_dimensions: [["InstanceId"]]` rollup. The alarms and dashboard query the
+`{InstanceId}` rollup, so that series must be present:
 
-    aws cloudwatch list-metrics --namespace CWAgent \
-      --metric-name jvm.memory.heap.used --dimensions Name=InstanceId,Value=<id>
+    aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm.memory.heap.used
+    aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm.gc.collections.elapsed
 
-**GC needs an extra check.** The OpenTelemetry JMX `jvm` target emits
+**GC and the per-collector rollup.** The OpenTelemetry JMX `jvm` target emits
 `jvm.gc.collections.elapsed` / `.count` **once per garbage collector** (e.g. "G1 Young
-Generation", "G1 Old Generation"), so the raw series carry a `name` dimension in addition
-to `InstanceId`. The alarm and dashboard query `{InstanceId}` only and therefore rely on
-the `aggregation_dimensions: [["InstanceId"]]` rollup in the agent config. Confirm that
-rollup is actually published:
+Generation", "G1 Old Generation") — a `name` dimension. The `{InstanceId}` rollup sums
+across collectors **server-side**, so the `gc_time` alarm and the dashboard read the rollup
+with **`stat = Sum`** to get total time-in-GC (`Maximum` would return only the single
+busiest collector). This is correct as long as JMX is collected at 60s (= the alarm/widget
+period) so there is one datapoint per period — a summed cumulative counter would over-count
+if the JMX `metrics_collection_interval` were set below the period.
 
-    aws cloudwatch list-metrics --namespace CWAgent \
-      --metric-name jvm.gc.collections.elapsed
-
-- If you see a series with **only** an `InstanceId` dimension (no `name`), the rollup
-  exists and the `gc_time` alarm/dashboard will resolve.
-- On a **multi-collector** JVM, the rolled-up series with `stat=Maximum` (what the module
-  uses) reflects the single busiest collector, not total time-in-GC. If you need true
-  total GC time, switch the `gc_time` alarm's `m1` stat (and the dashboard's) from
-  `Maximum` to `Sum`. Single-collector JVMs are unaffected (Max == Sum).
+> Dimension notes: `InstanceId` is all the alarms/dashboard need (they hit the rollup), so
+> `ImageId`/`InstanceType` in `append_dimensions` are optional — drop them to cut metric
+> cardinality/cost if you like; it won't affect the alarms. The `{InstanceId}` rollup also
+> collapses `ProcessGroupName`, so on a host running **multiple** JVMs their JVM metrics are
+> aggregated together; if you need per-process alarms there, target `{InstanceId,
+> ProcessGroupName}` instead and pass the process group per resource.
 
 ## Liveness is NOT covered by these alarms
 

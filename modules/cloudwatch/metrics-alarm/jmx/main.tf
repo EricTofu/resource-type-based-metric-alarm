@@ -140,6 +140,14 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
 #------------------------------------------------------------------------------
 # GC time (ms per minute) — DIFF of the cumulative jvm.gc.collections.elapsed counter.
 # A JVM restart resets the counter -> negative DIFF -> never breaches (alarm is '>').
+#
+# The OTel JMX receiver emits this metric once per garbage collector (a `name`
+# dimension, e.g. "G1 Young Generation"/"G1 Old Generation"). The agent's
+# aggregation_dimensions [["InstanceId"]] rollup sums across collectors server-side,
+# so we read the {InstanceId} rollup with stat=Sum to get TOTAL time-in-GC (Maximum
+# would return only the single busiest collector). Safe against double-counting because
+# JMX collects at 60s = this period (one datapoint per period); if you shorten the JMX
+# collection interval below 60s, revisit (a summed cumulative counter would over-count).
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "gc_time" {
@@ -174,7 +182,7 @@ resource "aws_cloudwatch_metric_alarm" "gc_time" {
     metric {
       namespace   = "CWAgent"
       metric_name = "jvm.gc.collections.elapsed"
-      stat        = "Maximum"
+      stat        = "Sum"
       period      = 60
       dimensions  = { InstanceId = data.aws_instance.this[each.key].id }
     }

@@ -51,9 +51,9 @@ locals {
           yAxis  = { left = { min = 0 } }
           metrics = [
             [{ expression = "DIFF(m1)", label = "GC time ms/min", id = "e1" }],
-            ["CWAgent", "jvm.gc.collections.elapsed", "InstanceId", inst.instance_id, { id = "m1", stat = "Maximum", visible = false }],
+            ["CWAgent", "jvm.gc.collections.elapsed", "InstanceId", inst.instance_id, { id = "m1", stat = "Sum", visible = false }],
             [{ expression = "DIFF(m2)", label = "GC cycles/min", id = "e2", yAxis = "right" }],
-            ["CWAgent", "jvm.gc.collections.count", "InstanceId", inst.instance_id, { id = "m2", stat = "Maximum", visible = false }]
+            ["CWAgent", "jvm.gc.collections.count", "InstanceId", inst.instance_id, { id = "m2", stat = "Sum", visible = false }]
           ]
         }
       },
