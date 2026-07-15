@@ -35,3 +35,8 @@ output "alarm_names" {
     jmx         = try(module.jmx_alarms[0].alarm_names, {})
   }
 }
+
+output "jmx_dashboard_json" {
+  description = "Rendered JVM dashboard body (regenerate dashboards/jmx-jvm.json from this after layout changes)."
+  value       = try(module.jmx_dashboard[0].dashboard_json, null)
+}

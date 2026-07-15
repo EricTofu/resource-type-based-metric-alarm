@@ -263,3 +263,9 @@ variable "jmx_resources" {
   }))
   default = []
 }
+
+variable "jmx_dashboard_enabled" {
+  description = "Create the per-instance JVM dashboard for the hosts in jmx_resources (requires jmx_resources to be non-empty)."
+  type        = bool
+  default     = false
+}
