@@ -66,8 +66,8 @@ here — left to host provisioning.
 ## Verify metrics are flowing (run on a live host before trusting the alarms)
 
 You should see **two** kinds of series per JVM metric: the fully-dimensioned one (carrying
-whatever you appended — `InstanceId`, `ProcessGroupName`, and optionally `ImageId`/
-`InstanceType`/`AutoScalingGroupName`) **and** a series with **only `InstanceId`** — the
+`InstanceId` plus dimensions the JMX receiver adds itself, e.g. `ProcessGroupName` and a
+per-collector `name` on the GC metrics) **and** a series with **only `InstanceId`** — the
 `aggregation_dimensions: [["InstanceId"]]` rollup. The alarms and dashboard query the
 `{InstanceId}` rollup, so that series must be present:
 
@@ -85,9 +85,10 @@ if the JMX collection interval were below the period. The shipped config pins
 `metrics_collection_interval: 60` inside the `jmx` block for exactly this reason; do not
 remove the pin when merging into an existing agent config.
 
-> Dimension notes: `InstanceId` is all the alarms/dashboard need (they hit the rollup), so
-> `ImageId`/`InstanceType` in `append_dimensions` are optional — drop them to cut metric
-> cardinality/cost if you like; it won't affect the alarms. The `{InstanceId}` rollup also
+> Dimension notes: `InstanceId` is all the alarms/dashboard need (they hit the rollup).
+> The shipped config appends only `InstanceId`; adding `ImageId`/`InstanceType` to
+> `append_dimensions` is possible but just raises metric cardinality/cost without
+> affecting the alarms. The `{InstanceId}` rollup also
 > collapses `ProcessGroupName`, so on a host running **multiple** JVMs their JVM metrics are
 > aggregated together; if you need per-process alarms there, target `{InstanceId,
 > ProcessGroupName}` instead and pass the process group per resource.
