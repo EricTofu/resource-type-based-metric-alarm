@@ -77,3 +77,4 @@ To run locally: `scripts/check_ec2_mem_metric.sh --tfvars stacks/projects/<proje
 2. Add `outputs.tf` exporting `alarm_arns` and `alarm_names`.
 3. Add the `<type>_resources` list variable to each project stack `variables.tf` that needs it (mirroring the module's `resources` type, minus defaults the module already applies).
 4. Add a `module "<type>_alarms"` block to the stack's `main.tf` with `count = length(var.<type>_resources) > 0 ? 1 : 0`.
+5. Add `<type> = try(module.<type>_alarms[0].alarm_arns, {})` (and the `alarm_names` twin) to the stack's `outputs.tf` — remote-state consumers only see alarms that are exported here.

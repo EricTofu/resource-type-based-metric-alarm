@@ -12,6 +12,8 @@ output "alarm_arns" {
     opensearch  = try(module.opensearch_alarms[0].alarm_arns, {})
     ses         = try(module.ses_alarms[0].alarm_arns, {})
     cloudfront  = try(module.cloudfront_alarms[0].alarm_arns, {})
+    efs         = try(module.efs_alarms[0].alarm_arns, {})
+    jmx         = try(module.jmx_alarms[0].alarm_arns, {})
   }
 }
 
@@ -29,5 +31,7 @@ output "alarm_names" {
     opensearch  = try(module.opensearch_alarms[0].alarm_names, {})
     ses         = try(module.ses_alarms[0].alarm_names, {})
     cloudfront  = try(module.cloudfront_alarms[0].alarm_names, {})
+    efs         = try(module.efs_alarms[0].alarm_names, {})
+    jmx         = try(module.jmx_alarms[0].alarm_names, {})
   }
 }
