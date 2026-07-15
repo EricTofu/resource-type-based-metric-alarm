@@ -51,6 +51,26 @@ variable "resources" {
     ])
     error_message = "overrides.disabled_alarms entries must be a subset of: throughput_util"
   }
+  validation {
+    condition     = length(distinct([for r in var.resources : coalesce(r.name, r.file_system_id)])) == length(var.resources)
+    error_message = "coalesce(name, file_system_id) must be unique across resources — duplicate friendly names make two entries render the same alarm_name, and CloudWatch upserts by name (one file system would be silently unmonitored)."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.period, null) == null
+      || (coalesce(try(r.overrides.period, null), 3600) >= 60 && coalesce(try(r.overrides.period, null), 3600) % 60 == 0)
+    ])
+    error_message = "overrides.period must be a multiple of 60 seconds (>= 60), or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      coalesce(try(r.overrides.evaluation_periods, null), 6) >= 1
+      && coalesce(try(r.overrides.period, null), 3600) * coalesce(try(r.overrides.evaluation_periods, null), 6) <= 86400
+    ])
+    error_message = "overrides.evaluation_periods must be >= 1, and period * evaluation_periods must not exceed 86400 seconds (CloudWatch's one-day evaluation-interval limit)."
+  }
 }
 
 variable "sns_topic_arns" {
