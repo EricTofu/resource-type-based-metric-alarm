@@ -67,7 +67,7 @@ Three severity levels (WARN / ERROR / CRIT) map to distinct SNS topic ARNs via `
 
 ### Preflight Checks
 
-`scripts/check_ec2_mem_metric.sh`, `scripts/check_asg_metrics.sh`, and `scripts/check_s3_metrics.sh` verify that prerequisite CloudWatch metrics exist before alarms are applied. They accept `--tfvars <path>` and are invoked by `.github/workflows/preflight.yml` on PRs that touch `stacks/projects/**/terraform.tfvars`. Requires `PREFLIGHT_READ_ROLE_ARN` GitHub secret (read-only CloudWatch/EC2/S3 IAM role).
+`scripts/check_ec2_mem_metric.sh`, `scripts/check_asg_metrics.sh`, `scripts/check_s3_metrics.sh`, and `scripts/check_jmx_metrics.sh` verify that prerequisite CloudWatch metrics exist before alarms are applied (the JMX check matters most: both JMX alarms treat missing data as notBreaching, so a host without the cwagent JMX config would otherwise sit green forever). They accept `--tfvars <path>` and are invoked by `.github/workflows/preflight.yml` on PRs that touch `stacks/projects/**/terraform.tfvars`. Requires `PREFLIGHT_READ_ROLE_ARN` GitHub secret (read-only CloudWatch/EC2/S3 IAM role).
 
 To run locally: `scripts/check_ec2_mem_metric.sh --tfvars stacks/projects/<project>/<env>/terraform.tfvars`
 

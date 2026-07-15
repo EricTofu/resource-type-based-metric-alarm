@@ -62,3 +62,13 @@ jobs:
             scripts/check_s3_metrics.sh --tfvars "$tfvars" || FAILED=1
           done
           exit $FAILED
+
+      - name: Run JMX metric check
+        if: steps.changed.outputs.tfvars == 'true'
+        run: |
+          FAILED=0
+          for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
+            echo "--- Checking JMX metrics: $tfvars"
+            scripts/check_jmx_metrics.sh --tfvars "$tfvars" || FAILED=1
+          done
+          exit $FAILED
