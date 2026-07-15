@@ -17,6 +17,11 @@ locals {
   name_prefix   = "${var.project}-${var.env}-JMX"
   jmx_resources = { for res in var.resources : res.name => res }
 
+  # Resolved by the single data.aws_instances lookup below. "unresolved" only
+  # exists so the expression can't index-crash on a zero-match; the per-alarm
+  # preconditions fail the plan (with the resource name) before it is ever used.
+  instance_ids = { for k, d in data.aws_instances.by_name : k => try(d.ids[0], "unresolved") }
+
   default_severities = {
     heap_used = "WARN"
     gc_time   = "WARN"
@@ -47,20 +52,6 @@ check "jmx_name_tag_uniqueness" {
       for k, d in data.aws_instances.by_name : length(d.ids) == 1
     ])
     error_message = "Every JMX resource must have exactly one running/stopped instance with a matching Name tag. Check: ${join(", ", [for k, d in data.aws_instances.by_name : "${k}=${length(d.ids)}" if length(d.ids) != 1])}"
-  }
-}
-
-data "aws_instance" "this" {
-  for_each = local.jmx_resources
-
-  filter {
-    name   = "tag:Name"
-    values = [each.value.name]
-  }
-
-  filter {
-    name   = "instance-state-name"
-    values = ["running", "stopped"]
   }
 }
 
@@ -102,7 +93,7 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
       metric_name = "jvm.memory.heap.used"
       stat        = "Average"
       period      = 60
-      dimensions  = { InstanceId = data.aws_instance.this[each.key].id }
+      dimensions  = { InstanceId = local.instance_ids[each.key] }
     }
   }
 
@@ -113,7 +104,7 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
       metric_name = "jvm.memory.heap.max"
       stat        = "Average"
       period      = 60
-      dimensions  = { InstanceId = data.aws_instance.this[each.key].id }
+      dimensions  = { InstanceId = local.instance_ids[each.key] }
     }
   }
 
@@ -135,6 +126,13 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
       ResourceName = each.value.name
     }
   )
+
+  lifecycle {
+    precondition {
+      condition     = length(data.aws_instances.by_name[each.key].ids) == 1
+      error_message = "JMX resource '${each.key}' must match exactly one running/stopped EC2 instance by Name tag (matched ${length(data.aws_instances.by_name[each.key].ids)})."
+    }
+  }
 }
 
 #------------------------------------------------------------------------------
@@ -184,7 +182,7 @@ resource "aws_cloudwatch_metric_alarm" "gc_time" {
       metric_name = "jvm.gc.collections.elapsed"
       stat        = "Sum"
       period      = 60
-      dimensions  = { InstanceId = data.aws_instance.this[each.key].id }
+      dimensions  = { InstanceId = local.instance_ids[each.key] }
     }
   }
 
@@ -206,4 +204,11 @@ resource "aws_cloudwatch_metric_alarm" "gc_time" {
       ResourceName = each.value.name
     }
   )
+
+  lifecycle {
+    precondition {
+      condition     = length(data.aws_instances.by_name[each.key].ids) == 1
+      error_message = "JMX resource '${each.key}' must match exactly one running/stopped EC2 instance by Name tag (matched ${length(data.aws_instances.by_name[each.key].ids)})."
+    }
+  }
 }
