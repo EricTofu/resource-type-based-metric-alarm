@@ -19,4 +19,8 @@ variable "instances" {
     name        = string
     instance_id = string
   }))
+  validation {
+    condition     = alltrue([for i in var.instances : can(regex("^i-[0-9a-f]{8,17}$", i.instance_id))])
+    error_message = "instances[*].instance_id must be an EC2 instance id (i-xxxxxxxxxxxxxxxxx). Pass resolved IDs — e.g. module.jmx_alarms[0].instance_ids — not Name tags."
+  }
 }

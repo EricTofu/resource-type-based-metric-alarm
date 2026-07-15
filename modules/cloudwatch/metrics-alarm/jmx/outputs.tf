@@ -13,3 +13,8 @@ output "alarm_names" {
     { for k, v in aws_cloudwatch_metric_alarm.gc_time : "${k}:GcTimeMsPerMinute" => v.alarm_name }
   )
 }
+
+output "instance_ids" {
+  description = "Map of resource name => resolved EC2 InstanceId, for pairing with modules/cloudwatch/dashboard/jmx (instances = [for n, id in ...instance_ids : { name = n, instance_id = id }])."
+  value       = local.instance_ids
+}
