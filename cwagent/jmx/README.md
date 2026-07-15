@@ -11,6 +11,10 @@ JVM dashboard depend on the contract below.
 - **Metrics:** `jvm.memory.heap.used`, `jvm.memory.heap.committed`, `jvm.memory.heap.max`,
   `jvm.gc.collections.count`, `jvm.gc.collections.elapsed`, `jvm.threads.count`,
   `jvm.classes.loaded`
+- **Collection interval:** `metrics_collection_interval: 60` is pinned inside the `jmx`
+  block — it must equal the alarm/widget period (60s). Keep the pin when merging this
+  snippet into an existing agent config; a shorter inherited interval breaks the
+  `gc_time` alarm's `stat = Sum` math (over-counts the cumulative GC counter).
 
 ## Prerequisites
 
@@ -77,7 +81,9 @@ across collectors **server-side**, so the `gc_time` alarm and the dashboard read
 with **`stat = Sum`** to get total time-in-GC (`Maximum` would return only the single
 busiest collector). This is correct as long as JMX is collected at 60s (= the alarm/widget
 period) so there is one datapoint per period — a summed cumulative counter would over-count
-if the JMX `metrics_collection_interval` were set below the period.
+if the JMX collection interval were below the period. The shipped config pins
+`metrics_collection_interval: 60` inside the `jmx` block for exactly this reason; do not
+remove the pin when merging into an existing agent config.
 
 > Dimension notes: `InstanceId` is all the alarms/dashboard need (they hit the rollup), so
 > `ImageId`/`InstanceType` in `append_dimensions` are optional — drop them to cut metric

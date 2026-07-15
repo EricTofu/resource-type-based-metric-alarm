@@ -11,6 +11,7 @@
       "jmx": [
         {
           "endpoint": "localhost:9999",
+          "metrics_collection_interval": 60,
           "jvm": {
             "measurement": [
               "jvm.memory.heap.used",
