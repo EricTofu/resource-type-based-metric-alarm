@@ -1,0 +1,94 @@
+{
+  "agent": {
+    "metrics_collection_interval": 60,
+    "run_as_user": "root"
+  },
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "<app-log-path>",
+            "log_group_name": "<log-group>",
+            "log_stream_name": "{instance_id}",
+            "retention_in_days": 180
+          }
+        ]
+      }
+    }
+  },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": { "InstanceId": "${aws:InstanceId}" },
+    "aggregation_dimensions": [["InstanceId"], ["InstanceId", "path"]],
+    "metrics_collected": {
+      "jmx": [
+        {
+          "endpoint": "<jmx-endpoint e.g. localhost:9999>",
+          "jvm": {
+            "measurement": [
+              "jvm.classes.loaded",
+              "jvm.gc.collections.count",
+              "jvm.gc.collections.elapsed",
+              "jvm.memory.heap.committed",
+              "jvm.memory.heap.max",
+              "jvm.memory.heap.used",
+              "jvm.memory.nonheap.committed",
+              "jvm.memory.nonheap.max",
+              "jvm.memory.nonheap.used",
+              "jvm.threads.count"
+            ]
+          },
+          "append_dimensions": {
+            "ProcessGroupName": "<process-group>",
+            "AppName": "<app-name>"
+          }
+        }
+      ],
+      "cpu": {
+        "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "mem": {
+        "measurement": ["mem_used_percent"],
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "disk": {
+        "measurement": ["disk_used_percent", "disk_inodes_free"],
+        "resources": ["/"],
+        "drop_device": true,
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "net": {
+        "measurement": ["net_bytes_recv", "net_bytes_sent"],
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "diskio": {
+        "measurement": ["diskio_io_time"],
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "swap": {
+        "measurement": ["swap_used_percent"],
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "netstat": {
+        "measurement": ["netstat_tcp_established", "netstat_tcp_time_wait"],
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "processes": {
+        "measurement": ["processes_running", "processes_total"],
+        "append_dimensions": { "AppName": "<app-name>" }
+      },
+      "ethtool": {
+        "metrics_include": [
+          "bw_in_allowance_exceeded",
+          "bw_out_allowance_exceeded",
+          "conntrack_allowance_exceeded",
+          "linklocal_allowance_exceeded",
+          "pps_allowance_exceeded"
+        ],
+        "append_dimensions": { "AppName": "<app-name>" }
+      }
+    }
+  }
+}
