@@ -18,6 +18,7 @@ variable "resources" {
       description      = optional(string)
       cpu_threshold    = optional(number)
       memory_threshold = optional(number)
+      disk_threshold   = optional(number)
       disabled_alarms  = optional(set(string), [])
     }), {})
   }))
@@ -47,12 +48,20 @@ variable "resources" {
   }
   validation {
     condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.disk_threshold, null) == null
+      || (coalesce(try(r.overrides.disk_threshold, null), 0) >= 0 && coalesce(try(r.overrides.disk_threshold, null), 0) <= 100)
+    ])
+    error_message = "overrides.disk_threshold must be between 0 and 100 inclusive, or omitted."
+  }
+  validation {
+    condition = alltrue([
       for r in var.resources : alltrue([
         for m in try(r.overrides.disabled_alarms, []) :
-        contains(["status_check", "status_check_ebs", "cpu", "memory"], m)
+        contains(["status_check", "status_check_ebs", "cpu", "memory", "disk"], m)
       ])
     ])
-    error_message = "overrides.disabled_alarms entries must be a subset of: status_check, status_check_ebs, cpu, memory"
+    error_message = "overrides.disabled_alarms entries must be a subset of: status_check, status_check_ebs, cpu, memory, disk"
   }
 
 }
@@ -88,6 +97,12 @@ variable "default_memory_threshold" {
   description = "Default threshold for mem_used_percent"
   type        = number
   default     = 80
+}
+
+variable "default_disk_threshold" {
+  description = "Default threshold for disk_used_percent (path /). Requires the CWAgent disk plugin with an [InstanceId, path] rollup — see cwagent/ec2-java/."
+  type        = number
+  default     = 85
 }
 
 variable "common_tags" {
