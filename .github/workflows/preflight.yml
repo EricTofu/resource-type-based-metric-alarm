@@ -72,3 +72,13 @@ jobs:
             scripts/check_jmx_metrics.sh --tfvars "$tfvars" || FAILED=1
           done
           exit $FAILED
+
+      - name: Run ASG fleet metric check
+        if: steps.changed.outputs.tfvars == 'true'
+        run: |
+          FAILED=0
+          for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
+            echo "--- Checking ASG fleet metrics: $tfvars"
+            scripts/check_asg_fleet_metrics.sh --tfvars "$tfvars" || FAILED=1
+          done
+          exit $FAILED
