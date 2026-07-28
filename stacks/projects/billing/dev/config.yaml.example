@@ -61,10 +61,15 @@ resources:
       overrides:
         cpu_threshold:    90
         memory_threshold: 85
-        disabled_alarms:  [memory]      # e.g. no CWAgent on this host
+        disk_threshold:   80            # disk_used_percent at {InstanceId, path=/}
+    # both CWAgent-fed alarms off on an agentless box
+    - name: billing-legacy-host
+      overrides:
+        disabled_alarms:  [memory, disk]
 
   asg:
-    # desired_capacity is REQUIRED (drives the capacity threshold)
+    # desired_capacity is REQUIRED (drives the capacity threshold).
+    # Legacy entries: name IS the live ASG name. valid legacy id: in_service_capacity
     - name: billing-web-asg
       desired_capacity: 4
     - name: billing-worker-asg
@@ -72,6 +77,29 @@ resources:
       overrides:
         severity:           ERROR
         capacity_threshold: 1
+    # Fleet entry: app_name switches to AppName-scoped Metrics Insights alarms
+    # (capacity + per-instance cpu/heap_used/memory/disk), so CodeDeploy
+    # blue/green churn of instance IDs and the ASG name needs no re-apply. Here
+    # `name` is only a label; app_name is the identity and must match the
+    # AppName tag on the instances AND the ASG, plus the AppName dimension the
+    # CloudWatch Agent appends (cwagent/ec2-java/).
+    # WARNING: adding app_name to an ALREADY-APPLIED entry needs TWO applies
+    # (remove -> apply -> re-add with app_name -> apply): both modes render the
+    # same GroupInServiceCapacity alarm name, and one plan would create and
+    # delete it concurrently. See modules/cloudwatch/metrics-alarm/asg/main.tf.
+    # heap_max_bytes = JVM -Xmx in bytes, required unless heap_used is disabled.
+    # process_group is optional (scopes the heap alarm on multi-JVM hosts).
+    - name: billing-chat-fleet
+      desired_capacity: 3
+      app_name:       billing-chat-live
+      heap_max_bytes: 12884901888        # -Xmx12G
+      process_group:  chat-server-tomcat
+      overrides:
+        cpu_threshold:      90
+        heap_threshold_pct: 80
+        disk_threshold:     80
+        # valid fleet ids: in_service_capacity, cpu, heap_used, memory, disk
+        disabled_alarms:    [memory]
 
   lambda:
     # timeout_ms is REQUIRED (drives the duration threshold)

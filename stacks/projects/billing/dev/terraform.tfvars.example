@@ -30,7 +30,6 @@ alb_resources = [
 
 apigateway_resources  = []
 ec2_resources         = []
-asg_resources         = []
 lambda_resources      = []
 rds_resources         = []
 s3_resources          = []
@@ -38,6 +37,47 @@ elasticache_resources = []
 opensearch_resources  = []
 ses_resources         = []
 cloudfront_resources  = []
+
+asg_resources = [
+  # desired_capacity is required on every entry (it is the capacity threshold).
+  #
+  # Legacy entry: name IS the live ASG name. One alarm, on the
+  # AutoScalingGroupName dimension. Valid legacy id: in_service_capacity
+  # {
+  #   name             = "billing-web-asg"
+  #   desired_capacity = 4
+  # },
+  #
+  # Fleet entry: app_name switches the entry to AppName-scoped Metrics Insights
+  # alarms (capacity + per-instance cpu/heap_used/memory/disk), so CodeDeploy
+  # blue/green churn of instance IDs and the ASG name needs no re-apply. Here
+  # `name` is only a logical label for alarm naming; app_name is the identity —
+  # it must match the AppName tag on the instances AND the ASG, and the AppName
+  # dimension the CloudWatch Agent appends (see cwagent/ec2-java/).
+  #
+  # WARNING: adding app_name to an entry that is already applied requires TWO
+  # applies (remove entry -> apply -> re-add with app_name -> apply). Both modes
+  # render the same GroupInServiceCapacity alarm name; a single plan would
+  # create and delete it concurrently. See modules/.../asg/main.tf.
+  #
+  # heap_max_bytes is the JVM -Xmx in bytes, required unless heap_used is
+  # disabled (the heap alarm is a byte threshold: heap_threshold_pct x it).
+  # process_group is optional — it scopes the heap alarm when a host runs >1 JVM.
+  # {
+  #   name             = "billing-chat-fleet"
+  #   desired_capacity = 3
+  #   app_name         = "billing-chat-live"
+  #   heap_max_bytes   = 12 * 1024 * 1024 * 1024 # -Xmx12G
+  #   process_group    = "chat-server-tomcat"
+  #   overrides = {
+  #     cpu_threshold      = 90
+  #     heap_threshold_pct = 80
+  #     disk_threshold     = 80
+  #     # Valid fleet ids: in_service_capacity, cpu, heap_used, memory, disk
+  #     disabled_alarms = ["memory"]
+  #   }
+  # },
+]
 
 efs_resources = [
   { file_system_id = "fs-0123456789abcdef0", name = "billing-shared-efs" },

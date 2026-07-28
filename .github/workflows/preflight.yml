@@ -34,7 +34,9 @@ jobs:
           aws-region: us-east-1
 
       - name: Run EC2 memory metric check
-        if: steps.changed.outputs.tfvars == 'true'
+        # !cancelled(): each check must run even if an earlier check FAILED —
+        # a bare `if:` implies success(), which used to skip every later check.
+        if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
@@ -44,7 +46,9 @@ jobs:
           exit $FAILED
 
       - name: Run ASG metric collection check
-        if: steps.changed.outputs.tfvars == 'true'
+        # !cancelled(): each check must run even if an earlier check FAILED —
+        # a bare `if:` implies success(), which used to skip every later check.
+        if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
@@ -54,7 +58,9 @@ jobs:
           exit $FAILED
 
       - name: Run S3 request metrics check
-        if: steps.changed.outputs.tfvars == 'true'
+        # !cancelled(): each check must run even if an earlier check FAILED —
+        # a bare `if:` implies success(), which used to skip every later check.
+        if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
@@ -64,7 +70,9 @@ jobs:
           exit $FAILED
 
       - name: Run JMX metric check
-        if: steps.changed.outputs.tfvars == 'true'
+        # !cancelled(): each check must run even if an earlier check FAILED —
+        # a bare `if:` implies success(), which used to skip every later check.
+        if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
@@ -74,7 +82,9 @@ jobs:
           exit $FAILED
 
       - name: Run ASG fleet metric check
-        if: steps.changed.outputs.tfvars == 'true'
+        # !cancelled(): each check must run even if an earlier check FAILED —
+        # a bare `if:` implies success(), which used to skip every later check.
+        if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do

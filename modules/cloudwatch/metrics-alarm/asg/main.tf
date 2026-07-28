@@ -16,7 +16,11 @@ locals {
 }
 
 #------------------------------------------------------------------------------
-# GroupInServiceCapacity Alarm
+# GroupInServiceCapacity Alarm (legacy mode: AutoScalingGroupName dimension)
+#
+# NOTE: this renders the same alarm_name as fleet_in_service_capacity below.
+# Adding/removing app_name on an existing entry needs a TWO-APPLY migration —
+# see the MIGRATION FOOTGUN comment on that resource before doing it.
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
@@ -79,6 +83,40 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
 # A metric_query alarm cannot carry dimensions, hence separate resources.
 #------------------------------------------------------------------------------
 
+#  ############################################################################
+#  ## MIGRATION FOOTGUN — READ BEFORE ADDING app_name TO AN EXISTING ENTRY.  ##
+#  ############################################################################
+#
+#  This alarm and aws_cloudwatch_metric_alarm.in_service_capacity above render
+#  the SAME alarm name: "${local.name_prefix}-[${name}]-GroupInServiceCapacity".
+#  That is deliberate — the naming convention is fixed (CLAUDE.md) and the alarm
+#  means the same thing in both modes. But CloudWatch alarm names are the API's
+#  identity: PutMetricAlarm upserts by name, DeleteAlarms deletes by name.
+#
+#  So adding app_name to an entry that already exists in state produces, in ONE
+#  plan, a create of fleet_in_service_capacity["k"] AND a destroy of
+#  in_service_capacity["k"] — two unrelated resource addresses with no
+#  dependency edge, which Terraform is free to run concurrently. If the destroy
+#  lands second, it DELETES the alarm the create just made: state says the
+#  ERROR-severity capacity watchdog exists, CloudWatch says it does not, and the
+#  pager is silently disarmed until someone notices or re-applies.
+#
+#  A `moved` block cannot fix this: it is static, so it would also move entries
+#  that legitimately stay in legacy mode.
+#
+#  REQUIRED PROCEDURE — flip the mode over TWO applies:
+#    1. Remove the entry from the *_resources list.  ->  terraform apply
+#       (destroys the legacy alarm; confirm it is gone in CloudWatch)
+#    2. Re-add the entry with app_name (+ heap_max_bytes ...).  -> terraform apply
+#       (creates the fleet alarms; the name is now free)
+#  Alternative: delete the legacy alarm out-of-band (`aws cloudwatch
+#  delete-alarms --alarm-names ...` + `terraform state rm`) BEFORE the apply
+#  that adds app_name.
+#
+#  The same collision applies in reverse (removing app_name from an entry).
+#  The four per-instance fleet alarms are unaffected: their names have no legacy
+#  counterpart.
+#
 resource "aws_cloudwatch_metric_alarm" "fleet_in_service_capacity" {
   for_each = {
     for k, v in local.fleet_resources : k => v

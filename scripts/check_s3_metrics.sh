@@ -71,7 +71,8 @@ for c in body:
         cur.append(c)
 
 for e in entries:
-    nm = re.search(r'name\s*=\s*"([^"]+)"', e)
+    # \b anchors on the whole key: unanchored 'name' also matches *_name keys.
+    nm = re.search(r'\bname\s*=\s*"([^"]+)"', e)
     if not nm:
         continue
     da = re.search(r'disabled_alarms\s*=\s*\[([^\]]*)\]', e)

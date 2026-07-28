@@ -94,6 +94,28 @@ variable "resources" {
     condition     = length([for r in var.resources : r.app_name if r.app_name != null]) == length(distinct([for r in var.resources : r.app_name if r.app_name != null]))
     error_message = "app_name values must be unique across fleet entries (one AppName = one fleet)."
   }
+  # An empty app_name would pass the null latch and render WHERE tag.AppName = '':
+  # the capacity alarm (missing data = breaching) would page forever and the
+  # per-instance alarms (notBreaching) would sit green forever. Omit the field
+  # for legacy mode instead.
+  #
+  # try() is the null guard on purpose: Terraform's || does not short-circuit
+  # (so `x == null || trimspace(x) != ""` still errors on null), and coalesce()
+  # treats "" as absent (so it would let the empty string through).
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(trimspace(r.app_name), "-") != ""
+    ])
+    error_message = "app_name must be a non-empty, non-whitespace string; omit the field entirely for legacy (non-fleet) entries."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(trimspace(r.process_group), "-") != ""
+    ])
+    error_message = "process_group must be a non-empty, non-whitespace string; omit the field to scope the heap alarm by AppName alone."
+  }
 }
 
 variable "sns_topic_arns" {
