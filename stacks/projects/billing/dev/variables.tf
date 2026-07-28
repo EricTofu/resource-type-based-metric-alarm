@@ -87,6 +87,7 @@ variable "ec2_resources" {
       description      = optional(string)
       cpu_threshold    = optional(number)
       memory_threshold = optional(number)
+      disk_threshold   = optional(number)
       disabled_alarms  = optional(set(string), [])
     }), {})
   }))
@@ -94,14 +95,21 @@ variable "ec2_resources" {
 }
 
 variable "asg_resources" {
-  description = "ASG resources to monitor."
+  description = "ASG resources to monitor. Set app_name for fleet mode (AppName-scoped Metrics Insights alarms; see docs/superpowers/specs/2026-07-24-asg-fleet-alarms-design.md)."
   type = list(object({
     name             = string
     desired_capacity = number
+    app_name         = optional(string)
+    heap_max_bytes   = optional(number)
+    process_group    = optional(string)
     overrides = optional(object({
       severity           = optional(string)
       description        = optional(string)
       capacity_threshold = optional(number)
+      cpu_threshold      = optional(number)
+      memory_threshold   = optional(number)
+      heap_threshold_pct = optional(number)
+      disk_threshold     = optional(number)
       disabled_alarms    = optional(set(string), [])
     }), {})
   }))
