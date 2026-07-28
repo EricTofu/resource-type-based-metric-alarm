@@ -4,8 +4,12 @@
 #   - running EC2 instances tagged AppName=<v> exist
 #   - tag-scoped GroupInServiceCapacity query returns data (proves the
 #     CloudWatch "resource tags on telemetry" setting + ASG tag)
+#   - (unless cpu disabled) tag-scoped CPUUtilization query returns data
+#     (proves tag telemetry for AWS/EC2 — a separate path from AWS/AutoScaling)
 #   - CWAgent series with AppName=<v>: mem_used_percent, disk_used_percent,
-#     and (unless heap_used disabled) jvm.memory.heap.used
+#     and (unless heap_used disabled) jvm.memory.heap.used; heap queries are
+#     scoped by ProcessGroupName when the entry sets process_group, exactly
+#     like the fleet_heap_used alarm
 #   - latest jvm.memory.heap.max ~= heap_max_bytes (+/-10%) — catches a
 #     tfvars/-Xmx mismatch before it skews the heap alarm's byte threshold
 # All fleet alarms except capacity treat missing data as notBreaching: a
@@ -41,9 +45,11 @@ print(m.group(1) if m else "")
 EOF
 )
 
-# Emits one line per fleet entry: name<TAB>app_name<TAB>heap_max_bytes<TAB>check_heap
-# heap_max_bytes prints "-" when unset; check_heap is 1 unless heap_used is in
-# disabled_alarms. Same brace-depth parser as check_jmx_metrics.sh.
+# Emits one line per fleet entry:
+#   name<TAB>app_name<TAB>heap_max_bytes<TAB>check_heap<TAB>check_cpu<TAB>process_group
+# heap_max_bytes and process_group print "-" when unset; check_heap is 1 unless
+# heap_used is in disabled_alarms, check_cpu is 1 unless cpu is. Same
+# brace-depth parser as check_jmx_metrics.sh.
 extract_fleet_entries() {
 python3 - "$TFVARS" <<'EOF'
 import re, sys
@@ -87,10 +93,12 @@ for e in entries:
     if not nm or not ap:
         continue  # legacy entry or malformed
     hm = re.search(r'\bheap_max_bytes\s*=\s*(\d+)', e)
+    pg = re.search(r'\bprocess_group\s*=\s*"([^"]+)"', e)
     da = re.search(r'disabled_alarms\s*=\s*\[([^\]]*)\]', e)
     disabled = re.findall(r'"([^"]+)"', da.group(1)) if da else []
     check_heap = 0 if "heap_used" in disabled else 1
-    print(f"{nm.group(1)}\t{ap.group(1)}\t{hm.group(1) if hm else '-'}\t{check_heap}")
+    check_cpu = 0 if "cpu" in disabled else 1
+    print(f"{nm.group(1)}\t{ap.group(1)}\t{hm.group(1) if hm else '-'}\t{check_heap}\t{check_cpu}\t{pg.group(1) if pg else '-'}")
 EOF
 }
 
@@ -132,7 +140,7 @@ check_query() {
   fi
 }
 
-while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP; do
+while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_CPU PG; do
   echo "--- Fleet entry '$NAME' (AppName=$APP)"
 
   COUNT=$(aws ec2 describe-instances \
@@ -151,6 +159,12 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP; do
     "SELECT SUM(GroupInServiceCapacity) FROM SCHEMA(\"AWS/AutoScaling\", AutoScalingGroupName) WHERE tag.AppName = '$APP'" \
     "Enable CloudWatch 'resource tags on telemetry' and tag the ASG itself with AppName=$APP."
 
+  if [[ "$CHECK_CPU" == "1" ]]; then
+    check_query "$NAME" "CPUUtilization (EC2 tag telemetry)" \
+      "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.AppName = '$APP' GROUP BY InstanceId" \
+      "Enable CloudWatch 'resource tags on telemetry' for EC2 instances; if unavailable, the spec's fallback is the agent-side cpu_usage_idle metric."
+  fi
+
   check_query "$NAME" "mem_used_percent" \
     "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE AppName = '$APP' GROUP BY InstanceId" \
     "Deploy the cwagent/ec2-java/ config (AppName dimension on the mem plugin)."
@@ -160,12 +174,18 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP; do
     "Deploy the cwagent/ec2-java/ config (AppName dimension on the disk plugin, resources ['/'])."
 
   if [[ "$CHECK_HEAP" == "1" ]]; then
+    # Same ProcessGroupName scoping as the fleet_heap_used alarm's expression.
+    PG_FILTER=""
+    if [[ "$PG" != "-" ]]; then
+      PG_FILTER=" AND ProcessGroupName = '$PG'"
+    fi
+
     check_query "$NAME" "jvm.memory.heap.used" \
-      "SELECT AVG(\"jvm.memory.heap.used\") FROM \"CWAgent\" WHERE AppName = '$APP' GROUP BY InstanceId" \
+      "SELECT AVG(\"jvm.memory.heap.used\") FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId" \
       "Deploy the cwagent/ec2-java/ config and expose the JMX endpoint on the JVM."
 
     if [[ "$HEAP_MAX" != "-" ]]; then
-      ACTUAL_MAX=$(insights_latest "SELECT MAX(\"jvm.memory.heap.max\") FROM \"CWAgent\" WHERE AppName = '$APP'")
+      ACTUAL_MAX=$(insights_latest "SELECT MAX(\"jvm.memory.heap.max\") FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER")
       if [[ -z "$ACTUAL_MAX" ]]; then
         echo "WARNING: [$NAME] jvm.memory.heap.max query returned no data; cannot sanity-check heap_max_bytes=$HEAP_MAX." >&2
         FAILED=1
