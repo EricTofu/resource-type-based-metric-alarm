@@ -38,6 +38,10 @@ opensearch_resources  = []
 ses_resources         = []
 cloudfront_resources  = []
 
+# A fleet is monitored by TWO modules under one identity: asg for capacity and OS
+# metrics, jmx for the JVM. Both entries carry the same app_name, which must equal
+# the AppName tag on the instances AND the ASG (asg native-metric queries) and the
+# AppName dimension in the agent config (all CWAgent queries).
 asg_resources = [
   # desired_capacity is required on every entry (it is the capacity threshold).
   #
@@ -49,34 +53,50 @@ asg_resources = [
   # },
   #
   # Fleet entry: app_name switches the entry to AppName-scoped Metrics Insights
-  # alarms (capacity + per-instance cpu/heap_used/memory/disk), so CodeDeploy
-  # blue/green churn of instance IDs and the ASG name needs no re-apply. Here
-  # `name` is only a logical label for alarm naming; app_name is the identity —
-  # it must match the AppName tag on the instances AND the ASG, and the AppName
-  # dimension the CloudWatch Agent appends (see cwagent/ec2-java/).
+  # alarms (capacity + per-instance cpu/memory/disk), so CodeDeploy blue/green
+  # churn of instance IDs and the ASG name needs no re-apply. Here `name` is only
+  # a logical label for alarm naming; app_name is the identity.
   #
   # WARNING: adding app_name to an entry that is already applied requires TWO
   # applies (remove entry -> apply -> re-add with app_name -> apply). Both modes
   # render the same GroupInServiceCapacity alarm name; a single plan would
   # create and delete it concurrently. See modules/.../asg/main.tf.
-  #
-  # heap_max_bytes is the JVM -Xmx in bytes, required unless heap_used is
-  # disabled (the heap alarm is a byte threshold: heap_threshold_pct x it).
-  # process_group is optional — it scopes the heap alarm when a host runs >1 JVM.
-  # {
-  #   name             = "billing-chat-fleet"
-  #   desired_capacity = 3
-  #   app_name         = "billing-chat-live"
-  #   heap_max_bytes   = 12 * 1024 * 1024 * 1024 # -Xmx12G
-  #   process_group    = "chat-server-tomcat"
-  #   overrides = {
-  #     cpu_threshold      = 90
-  #     heap_threshold_pct = 80
-  #     disk_threshold     = 80
-  #     # Valid fleet ids: in_service_capacity, cpu, heap_used, memory, disk
-  #     disabled_alarms = ["memory"]
-  #   }
-  # },
+  {
+    name             = "billing-chat-fleet"
+    desired_capacity = 3
+    app_name         = "billing-chat-live"
+    overrides = {
+      cpu_threshold  = 90
+      disk_threshold = 80
+      # Valid fleet ids: in_service_capacity, cpu, memory, disk
+      disabled_alarms = ["memory"]
+    }
+  },
+]
+
+# valid jmx ids: heap_used, gc_time. heap_max_bytes = JVM -Xmx in bytes, required
+# unless heap_used is disabled (the alarm is a byte threshold). process_group
+# scopes the queries when a host runs more than one JVM. `name` is a label only.
+jmx_resources = [
+  {
+    name           = "billing-chat-fleet"
+    app_name       = "billing-chat-live"
+    heap_max_bytes = 12884901888 # -Xmx12G
+    process_group  = "chat-server-tomcat"
+    overrides = {
+      gc_time_threshold_ms = 12000
+    }
+  },
+  # standalone Java hosts may share one app_name; the entry then covers all of
+  # them, alarming when ANY instance breaches (GROUP BY InstanceId)
+  {
+    name           = "billing-batch-java"
+    app_name       = "billing-batch"
+    heap_max_bytes = 4294967296 # -Xmx4G
+    overrides = {
+      heap_threshold = 80
+    }
+  },
 ]
 
 efs_resources = [
@@ -85,13 +105,5 @@ efs_resources = [
     file_system_id = "fs-0fedcba9876543210"
     name           = "billing-reports-efs"
     overrides      = { throughput_util_threshold = 70, evaluation_periods = 12, severity = "ERROR" }
-  },
-]
-
-jmx_resources = [
-  { name = "billing-java-app-1" },
-  {
-    name      = "billing-java-app-2"
-    overrides = { heap_threshold = 90, gc_time_threshold_ms = 12000, severity = "ERROR" }
   },
 ]

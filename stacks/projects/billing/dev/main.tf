@@ -150,8 +150,8 @@ module "jmx_dashboard" {
   source = "../../../../modules/cloudwatch/dashboard/jmx"
   count  = var.jmx_dashboard_enabled && length(var.jmx_resources) > 0 ? 1 : 0
 
-  project   = var.project
-  env       = var.env
-  region    = var.aws_region
-  instances = [for n, id in module.jmx_alarms[0].instance_ids : { name = n, instance_id = id }]
+  project = var.project
+  env     = var.env
+  region  = var.aws_region
+  targets = module.jmx_alarms[0].dashboard_targets
 }

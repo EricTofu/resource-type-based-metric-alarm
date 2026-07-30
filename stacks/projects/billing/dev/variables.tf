@@ -100,15 +100,12 @@ variable "asg_resources" {
     name             = string
     desired_capacity = number
     app_name         = optional(string)
-    heap_max_bytes   = optional(number)
-    process_group    = optional(string)
     overrides = optional(object({
       severity           = optional(string)
       description        = optional(string)
       capacity_threshold = optional(number)
       cpu_threshold      = optional(number)
       memory_threshold   = optional(number)
-      heap_threshold_pct = optional(number)
       disk_threshold     = optional(number)
       disabled_alarms    = optional(set(string), [])
     }), {})
@@ -257,10 +254,13 @@ variable "efs_resources" {
 }
 
 variable "jmx_resources" {
-  description = "EC2 hosts (by Name tag) running a JMX-exposed Java app to monitor."
+  description = "Java host groups to monitor, identified by the CWAgent AppName dimension (see cwagent/ec2-java/). One entry covers every instance sharing that AppName — an ASG fleet or interchangeable standalone hosts. `name` is a label only, NOT a Name-tag lookup."
   type = list(object({
-    name    = string
-    enabled = optional(bool, true)
+    name           = string
+    app_name       = string
+    heap_max_bytes = optional(number)
+    process_group  = optional(string)
+    enabled        = optional(bool, true)
     overrides = optional(object({
       severity             = optional(string)
       description          = optional(string)
