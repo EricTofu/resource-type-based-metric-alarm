@@ -47,15 +47,20 @@ print(m.group(1) if m else "")
 EOF
 )
 
-# Emits one line per jmx_resources entry:
-#   name<TAB>app_name<TAB>heap_max_bytes<TAB>check_heap<TAB>check_gc<TAB>process_group
+# Emits one line per jmx_resources entry, each prefixed with a type column:
+#   ENTRY<TAB>name<TAB>app_name<TAB>heap_max_bytes<TAB>check_heap<TAB>check_gc<TAB>process_group
 # heap_max_bytes and process_group print "-" when unset; check_heap is 1
 # unless heap_used is in disabled_alarms, check_gc is 1 unless gc_time is.
 # Entries missing app_name or name are malformed (app_name is now the required
 # identity; name is required for alarm-naming/output purposes) and are instead
-# emitted as a "MALFORMED\t<message>" sentinel line — the caller (running
-# outside this subshell) counts those lines, echoes them as warnings, and
-# fails the preflight instead of silently reporting "no entries found".
+# emitted as:
+#   MALFORMED<TAB>message
+# The type column is a hardcoded Python string literal, never built from
+# tfvars content, so it cannot collide with a user-supplied field — e.g. a
+# resource whose `name` is literally "MALFORMED" still emits ENTRY\tMALFORMED\t...
+# The caller (running outside this subshell) splits on the leading column,
+# counts MALFORMED lines, echoes them as warnings, and fails the preflight
+# instead of silently reporting "no entries found".
 #
 # heap_max_bytes is an HCL expression, commonly written as a product
 # (12 * 1024 * 1024 * 1024). It is evaluated as a literal integer expression via
@@ -139,10 +144,10 @@ for e in entries:
     if not nm and not ap:
         continue  # neither identifying field present; nothing to name the warning after
     if not ap:
-        # Emitted on stdout (not just stderr) as a MALFORMED sentinel: this
-        # function runs inside a $(...) subshell, so a plain stderr warning
-        # cannot flip FAILED in the parent shell. The caller counts these
-        # lines and fails the preflight instead of silently skipping.
+        # Type column emitted first, hardcoded here (never interpolated from
+        # tfvars content) — see the caller for why this makes the
+        # ENTRY/MALFORMED discriminator collision-proof against any name a
+        # user could write, including a resource literally named "MALFORMED".
         print(f"MALFORMED\tapp_name is required; skipping entry with no app_name (name={nm.group(1)})")
         continue
     if not nm:
@@ -161,27 +166,35 @@ for e in entries:
         value = literal_int(raw)
         heap = str(value) if value is not None else "?"
 
-    print(f"{nm.group(1)}\t{ap.group(1)}\t{heap}\t{check_heap}\t{check_gc}\t{pg.group(1) if pg else '-'}")
+    # Leading "ENTRY" type column — see the caller for why this, not a string
+    # prefix on the whole line, is what makes the discriminator collision-proof.
+    print(f"ENTRY\t{nm.group(1)}\t{ap.group(1)}\t{heap}\t{check_heap}\t{check_gc}\t{pg.group(1) if pg else '-'}")
 EOF
 }
 
 RAW_ENTRIES=$(extract_jmx_entries)
 
-# Split the "MALFORMED\t<message>" sentinels (see extract_jmx_entries above)
-# out of the real entry lines. A malformed entry must not be able to make the
-# script look clean — it is reported as a warning here (parent shell, not the
-# parser's subshell) and counted so it can flip FAILED even when it leaves
-# zero valid entries behind.
+# Every line from extract_jmx_entries starts with a type column, "ENTRY" or
+# "MALFORMED", written as a Python string literal in the code above — never
+# built from anything read out of tfvars. That makes it collision-proof
+# against user data: a resource whose `name` is literally "MALFORMED" still
+# comes out as ENTRY\tMALFORMED\t<app_name>\t..., so TYPE (the first
+# tab-separated field, split off below) is "ENTRY", not "MALFORMED", no matter
+# what the name/app_name/etc. fields contain. Do NOT go back to matching a
+# string prefix on the whole line — that was the round-1 bug this replaced.
 MALFORMED_COUNT=0
 ENTRIES=""
 if [[ -n "$RAW_ENTRIES" ]]; then
-  while IFS= read -r LINE; do
-    if [[ "$LINE" == MALFORMED$'\t'* ]]; then
-      echo "WARNING: ${LINE#MALFORMED$'\t'}" >&2
-      MALFORMED_COUNT=$((MALFORMED_COUNT + 1))
-    else
-      ENTRIES+="$LINE"$'\n'
-    fi
+  while IFS=$'\t' read -r TYPE REST; do
+    case "$TYPE" in
+      MALFORMED)
+        echo "WARNING: $REST" >&2
+        MALFORMED_COUNT=$((MALFORMED_COUNT + 1))
+        ;;
+      ENTRY)
+        ENTRIES+="$REST"$'\n'
+        ;;
+    esac
   done <<< "$RAW_ENTRIES"
 fi
 ENTRIES="${ENTRIES%$'\n'}"
