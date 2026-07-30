@@ -9,10 +9,13 @@ variable "env" {
 }
 
 variable "resources" {
-  description = "List of EC2 hosts (by Name tag) running a JMX-exposed Java app"
+  description = "Java host groups to monitor, identified by the CWAgent AppName dimension (see cwagent/ec2-java/). One entry may cover several instances — ASG fleet members, or interchangeable standalone hosts sharing an AppName — because alarms fan out per InstanceId at evaluation time. `name` is a label for alarm naming and output keys only; it is NOT a Name-tag lookup."
   type = list(object({
-    name    = string
-    enabled = optional(bool, true)
+    name           = string
+    app_name       = string
+    heap_max_bytes = optional(number)
+    process_group  = optional(string)
+    enabled        = optional(bool, true)
     overrides = optional(object({
       severity             = optional(string)
       description          = optional(string)
@@ -35,7 +38,7 @@ variable "resources" {
       try(r.overrides.heap_threshold, null) == null
       || (coalesce(try(r.overrides.heap_threshold, null), 0) >= 0 && coalesce(try(r.overrides.heap_threshold, null), 0) <= 100)
     ])
-    error_message = "overrides.heap_threshold must be between 0 and 100 inclusive, or omitted."
+    error_message = "overrides.heap_threshold must be between 0 and 100 inclusive, or omitted. It is a percentage of heap_max_bytes."
   }
   validation {
     condition = alltrue([
@@ -53,6 +56,28 @@ variable "resources" {
     ])
     error_message = "overrides.disabled_alarms entries must be a subset of: heap_used, gc_time"
   }
+  # try(...,"") makes null fail: app_name is the identity and cannot be inferred.
+  validation {
+    condition     = alltrue([for r in var.resources : try(trimspace(r.app_name), "") != ""])
+    error_message = "app_name must be a non-empty string — the CWAgent AppName dimension value that identifies this host group."
+  }
+  validation {
+    condition     = length([for r in var.resources : r.app_name]) == length(distinct([for r in var.resources : r.app_name]))
+    error_message = "app_name values must be unique across entries (one AppName = one host group)."
+  }
+  # try(...,"-") makes null pass: process_group is optional.
+  validation {
+    condition     = alltrue([for r in var.resources : try(trimspace(r.process_group), "-") != ""])
+    error_message = "process_group must be a non-empty string when set, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      contains(try(r.overrides.disabled_alarms, []), "heap_used")
+      || (r.heap_max_bytes != null && coalesce(r.heap_max_bytes, 0) > 0)
+    ])
+    error_message = "heap_max_bytes (> 0, the JVM -Xmx in bytes) is required unless heap_used is in disabled_alarms — the heap alarm is a byte threshold, because CloudWatch math cannot divide two GROUP BY series arrays."
+  }
 }
 
 variable "sns_topic_arns" {
@@ -69,13 +94,13 @@ variable "sns_topic_arns" {
 }
 
 variable "default_heap_threshold" {
-  description = "Default threshold (percent) for JVM heap used"
+  description = "Default JVM heap threshold as a percent of each entry's heap_max_bytes. Rendered into a byte threshold on jvm_memory_heap_used."
   type        = number
   default     = 85
 }
 
 variable "default_gc_time_threshold_ms" {
-  description = "Default threshold (milliseconds of GC per minute) for jvm.gc.collections.elapsed"
+  description = "Default threshold (milliseconds of GC per minute) for DIFF of jvm_gc_collections_elapsed"
   type        = number
   default     = 6000
 }
