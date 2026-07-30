@@ -13,14 +13,19 @@ variable "region" {
   type        = string
 }
 
-variable "instances" {
-  description = "Java hosts to chart: friendly name + resolved EC2 InstanceId"
+variable "targets" {
+  description = "Java host groups to chart, identified by the CWAgent AppName dimension. Widgets use Metrics Insights grouped by InstanceId, so membership resolves at render time — no instance IDs, and fleet churn needs no apply. Pass modules/cloudwatch/metrics-alarm/jmx's dashboard_targets output."
   type = list(object({
-    name        = string
-    instance_id = string
+    name          = string
+    app_name      = string
+    process_group = optional(string)
   }))
   validation {
-    condition     = alltrue([for i in var.instances : can(regex("^i-[0-9a-f]{8,17}$", i.instance_id))])
-    error_message = "instances[*].instance_id must be an EC2 instance id (i-xxxxxxxxxxxxxxxxx). Pass resolved IDs — e.g. module.jmx_alarms[0].instance_ids — not Name tags."
+    condition     = alltrue([for t in var.targets : try(trimspace(t.app_name), "") != ""])
+    error_message = "targets[*].app_name must be a non-empty CWAgent AppName dimension value."
+  }
+  validation {
+    condition     = alltrue([for t in var.targets : try(trimspace(t.name), "") != ""])
+    error_message = "targets[*].name must be a non-empty label (used in widget titles)."
   }
 }

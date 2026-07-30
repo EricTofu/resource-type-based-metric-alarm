@@ -1,55 +1,122 @@
 {
   "widgets": [
     {
-      "type": "metric",
-      "x": 0, "y": 0, "width": 8, "height": 6,
+      "height": 6,
       "properties": {
-        "title": "java-app — Heap",
-        "region": "ap-northeast-1",
-        "view": "timeSeries",
-        "stat": "Average",
-        "period": 60,
-        "yAxis": { "left": { "min": 0 } },
         "metrics": [
-          [ { "expression": "100*m1/m2", "label": "Heap used %", "id": "e1" } ],
-          [ "CWAgent", "jvm.memory.heap.used", "InstanceId", "i-PLACEHOLDER", { "id": "m1", "visible": false } ],
-          [ "CWAgent", "jvm.memory.heap.max", "InstanceId", "i-PLACEHOLDER", { "id": "m2", "visible": false } ],
-          [ "CWAgent", "jvm.memory.heap.committed", "InstanceId", "i-PLACEHOLDER", { "label": "Heap committed (bytes)", "yAxis": "right" } ]
-        ]
-      }
+          [
+            {
+              "expression": "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "id": "q1",
+              "label": "Heap used"
+            }
+          ],
+          [
+            {
+              "expression": "SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1'",
+              "id": "q2",
+              "label": "Heap max"
+            }
+          ]
+        ],
+        "period": 60,
+        "region": "ap-northeast-1",
+        "title": "billing-java-app-1 — Heap (bytes)",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      },
+      "type": "metric",
+      "width": 8,
+      "x": 0,
+      "y": 0
     },
     {
-      "type": "metric",
-      "x": 8, "y": 0, "width": 8, "height": 6,
+      "height": 6,
       "properties": {
-        "title": "java-app — GC time (ms/min)",
-        "region": "ap-northeast-1",
-        "view": "timeSeries",
-        "period": 60,
-        "yAxis": { "left": { "min": 0 } },
         "metrics": [
-          [ { "expression": "DIFF(m1)", "label": "GC time ms/min", "id": "e1" } ],
-          [ "CWAgent", "jvm.gc.collections.elapsed", "InstanceId", "i-PLACEHOLDER", { "id": "m1", "stat": "Sum", "visible": false } ],
-          [ { "expression": "DIFF(m2)", "label": "GC cycles/min", "id": "e2", "yAxis": "right" } ],
-          [ "CWAgent", "jvm.gc.collections.count", "InstanceId", "i-PLACEHOLDER", { "id": "m2", "stat": "Sum", "visible": false } ]
-        ]
-      }
+          [
+            {
+              "expression": "DIFF(q1)",
+              "id": "e1",
+              "label": "GC time ms/min"
+            }
+          ],
+          [
+            {
+              "expression": "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "id": "q1",
+              "visible": false
+            }
+          ],
+          [
+            {
+              "expression": "DIFF(q2)",
+              "id": "e2",
+              "label": "GC cycles/min",
+              "yAxis": "right"
+            }
+          ],
+          [
+            {
+              "expression": "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "id": "q2",
+              "visible": false
+            }
+          ]
+        ],
+        "period": 60,
+        "region": "ap-northeast-1",
+        "title": "billing-java-app-1 — GC time (ms/min)",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      },
+      "type": "metric",
+      "width": 8,
+      "x": 8,
+      "y": 0
     },
     {
-      "type": "metric",
-      "x": 16, "y": 0, "width": 8, "height": 6,
+      "height": 6,
       "properties": {
-        "title": "java-app — Threads & classes",
-        "region": "ap-northeast-1",
-        "view": "timeSeries",
-        "stat": "Average",
-        "period": 60,
-        "yAxis": { "left": { "min": 0 } },
         "metrics": [
-          [ "CWAgent", "jvm.threads.count", "InstanceId", "i-PLACEHOLDER", { "label": "Threads" } ],
-          [ "CWAgent", "jvm.classes.loaded", "InstanceId", "i-PLACEHOLDER", { "label": "Classes loaded", "yAxis": "right" } ]
-        ]
-      }
+          [
+            {
+              "expression": "SELECT AVG(jvm_threads_count) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "id": "q1",
+              "label": "Threads"
+            }
+          ],
+          [
+            {
+              "expression": "SELECT AVG(jvm_classes_loaded) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "id": "q2",
+              "label": "Classes loaded",
+              "yAxis": "right"
+            }
+          ]
+        ],
+        "period": 60,
+        "region": "ap-northeast-1",
+        "title": "billing-java-app-1 — Threads & classes",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      },
+      "type": "metric",
+      "width": 8,
+      "x": 16,
+      "y": 0
     }
   ]
 }

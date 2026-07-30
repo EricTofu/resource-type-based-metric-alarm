@@ -1,7 +1,9 @@
 #------------------------------------------------------------------------------
 # JVM / JMX CloudWatch dashboard. Body built with jsonencode (single source);
 # `dashboard_json` output is the same body for console import (dashboards/jmx-jvm.json).
-# Three widgets per instance: heap (used % + bytes), GC time/min, threads + classes.
+# Three widgets per host group: heap bytes, GC time/min, threads + classes.
+# Every series is a Metrics Insights query GROUP BY InstanceId, so a widget shows
+# one line per live instance and follows fleet churn with no Terraform run.
 #------------------------------------------------------------------------------
 
 terraform {
@@ -14,8 +16,14 @@ terraform {
 }
 
 locals {
+  # Optional extra scope for multi-JVM hosts; empty string when unset.
+  pg_filter = {
+    for t in var.targets : t.name =>
+    t.process_group != null ? " AND ProcessGroupName = '${t.process_group}'" : ""
+  }
+
   widgets = flatten([
-    for idx, inst in var.instances : [
+    for idx, t in var.targets : [
       {
         type   = "metric"
         x      = 0
@@ -23,17 +31,14 @@ locals {
         width  = 8
         height = 6
         properties = {
-          title  = "${inst.name} — Heap"
+          title  = "${t.name} — Heap (bytes)"
           region = var.region
           view   = "timeSeries"
-          stat   = "Average"
           period = 60
           yAxis  = { left = { min = 0 } }
           metrics = [
-            [{ expression = "100*m1/m2", label = "Heap used %", id = "e1" }],
-            ["CWAgent", "jvm.memory.heap.used", "InstanceId", inst.instance_id, { id = "m1", visible = false }],
-            ["CWAgent", "jvm.memory.heap.max", "InstanceId", inst.instance_id, { id = "m2", visible = false }],
-            ["CWAgent", "jvm.memory.heap.committed", "InstanceId", inst.instance_id, { label = "Heap committed (bytes)", yAxis = "right" }]
+            [{ id = "q1", label = "Heap used", expression = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
+            [{ id = "q2", label = "Heap max", expression = "SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]}" }]
           ]
         }
       },
@@ -44,16 +49,16 @@ locals {
         width  = 8
         height = 6
         properties = {
-          title  = "${inst.name} — GC time (ms/min)"
+          title  = "${t.name} — GC time (ms/min)"
           region = var.region
           view   = "timeSeries"
           period = 60
           yAxis  = { left = { min = 0 } }
           metrics = [
-            [{ expression = "DIFF(m1)", label = "GC time ms/min", id = "e1" }],
-            ["CWAgent", "jvm.gc.collections.elapsed", "InstanceId", inst.instance_id, { id = "m1", stat = "Sum", visible = false }],
-            [{ expression = "DIFF(m2)", label = "GC cycles/min", id = "e2", yAxis = "right" }],
-            ["CWAgent", "jvm.gc.collections.count", "InstanceId", inst.instance_id, { id = "m2", stat = "Sum", visible = false }]
+            [{ id = "e1", label = "GC time ms/min", expression = "DIFF(q1)" }],
+            [{ id = "q1", visible = false, expression = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
+            [{ id = "e2", label = "GC cycles/min", yAxis = "right", expression = "DIFF(q2)" }],
+            [{ id = "q2", visible = false, expression = "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
           ]
         }
       },
@@ -64,15 +69,14 @@ locals {
         width  = 8
         height = 6
         properties = {
-          title  = "${inst.name} — Threads & classes"
+          title  = "${t.name} — Threads & classes"
           region = var.region
           view   = "timeSeries"
-          stat   = "Average"
           period = 60
           yAxis  = { left = { min = 0 } }
           metrics = [
-            ["CWAgent", "jvm.threads.count", "InstanceId", inst.instance_id, { label = "Threads" }],
-            ["CWAgent", "jvm.classes.loaded", "InstanceId", inst.instance_id, { label = "Classes loaded", yAxis = "right" }]
+            [{ id = "q1", label = "Threads", expression = "SELECT AVG(jvm_threads_count) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
+            [{ id = "q2", label = "Classes loaded", yAxis = "right", expression = "SELECT AVG(jvm_classes_loaded) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
           ]
         }
       }
