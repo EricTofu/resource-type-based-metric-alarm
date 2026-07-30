@@ -79,9 +79,11 @@ per-collector `name` on the GC metrics) **and** a series with **only `InstanceId
     aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm_memory_heap_used
     aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm_gc_collections_elapsed
 
-**GC and the per-collector rollup.** The OpenTelemetry JMX `jvm` target emits
-`jvm_gc_collections_elapsed` / `_count` **once per garbage collector** (e.g. "G1 Young
-Generation", "G1 Old Generation") — a `name` dimension. The `{InstanceId}` rollup sums
+**GC and the per-collector rollup.** The underlying OpenTelemetry JMX `jvm` target emits
+one series **per garbage collector** (e.g. "G1 Young Generation", "G1 Old Generation")
+— a `name` dimension — under its native OTel dotted metric name; the CloudWatch Agent
+renames each to `jvm_gc_collections_elapsed` / `_count` (the `rename` field in the
+contract above) before publishing. The `{InstanceId}` rollup sums
 across collectors **server-side**, so the `gc_time` alarm and the dashboard read the rollup
 with **`stat = Sum`** to get total time-in-GC (`Maximum` would return only the single
 busiest collector). This is correct as long as JMX is collected at 60s (= the alarm/widget
