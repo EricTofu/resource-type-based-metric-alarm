@@ -9,13 +9,11 @@ variable "env" {
 }
 
 variable "resources" {
-  description = "List of ASG resources to monitor. Entries with app_name set use fleet mode (AppName-scoped Metrics Insights alarms); entries without it use legacy mode (AutoScalingGroupName dimension alarm only)."
+  description = "List of ASG resources to monitor. Entries with app_name set use fleet mode (AppName-scoped Metrics Insights alarms); entries without it use legacy mode (AutoScalingGroupName dimension alarm only). JVM heap/GC alarms for these instances live in modules/cloudwatch/metrics-alarm/jmx, keyed by the same app_name."
   type = list(object({
     name             = string
     desired_capacity = number
     app_name         = optional(string)
-    heap_max_bytes   = optional(number)
-    process_group    = optional(string)
     enabled          = optional(bool, true)
     overrides = optional(object({
       severity           = optional(string)
@@ -23,7 +21,6 @@ variable "resources" {
       capacity_threshold = optional(number)
       cpu_threshold      = optional(number)
       memory_threshold   = optional(number)
-      heap_threshold_pct = optional(number)
       disk_threshold     = optional(number)
       disabled_alarms    = optional(set(string), [])
     }), {})
@@ -46,12 +43,12 @@ variable "resources" {
   validation {
     condition = alltrue([
       for r in var.resources : alltrue([
-        for t in ["cpu_threshold", "memory_threshold", "heap_threshold_pct", "disk_threshold"] :
+        for t in ["cpu_threshold", "memory_threshold", "disk_threshold"] :
         try(r.overrides[t], null) == null
         || (coalesce(try(r.overrides[t], null), 0) >= 0 && coalesce(try(r.overrides[t], null), 0) <= 100)
       ])
     ])
-    error_message = "overrides.cpu_threshold, memory_threshold, heap_threshold_pct and disk_threshold must be between 0 and 100 inclusive, or omitted."
+    error_message = "overrides.cpu_threshold, memory_threshold and disk_threshold must be between 0 and 100 inclusive, or omitted."
   }
   validation {
     condition = alltrue([
@@ -60,35 +57,23 @@ variable "resources" {
         contains(
           r.app_name == null
           ? ["in_service_capacity"]
-          : ["in_service_capacity", "cpu", "heap_used", "memory", "disk"],
+          : ["in_service_capacity", "cpu", "memory", "disk"],
           m
         )
       ])
     ])
-    error_message = "overrides.disabled_alarms must be a subset of [in_service_capacity] for legacy entries (no app_name) or [in_service_capacity, cpu, heap_used, memory, disk] for fleet entries."
+    error_message = "overrides.disabled_alarms must be a subset of [in_service_capacity] for legacy entries (no app_name) or [in_service_capacity, cpu, memory, disk] for fleet entries."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
       r.app_name != null || (
-        r.heap_max_bytes == null
-        && r.process_group == null
-        && try(r.overrides.cpu_threshold, null) == null
+        try(r.overrides.cpu_threshold, null) == null
         && try(r.overrides.memory_threshold, null) == null
-        && try(r.overrides.heap_threshold_pct, null) == null
         && try(r.overrides.disk_threshold, null) == null
       )
     ])
-    error_message = "heap_max_bytes, process_group and the cpu/memory/heap/disk threshold overrides are fleet-mode fields; set app_name on the entry or remove them."
-  }
-  validation {
-    condition = alltrue([
-      for r in var.resources :
-      r.app_name == null
-      || contains(try(r.overrides.disabled_alarms, []), "heap_used")
-      || (r.heap_max_bytes != null && coalesce(r.heap_max_bytes, 0) > 0)
-    ])
-    error_message = "Fleet entries must set heap_max_bytes (> 0, the JVM -Xmx in bytes) unless heap_used is in disabled_alarms."
+    error_message = "the cpu/memory/disk threshold overrides are fleet-mode fields; set app_name on the entry or remove them."
   }
   validation {
     condition     = length([for r in var.resources : r.app_name if r.app_name != null]) == length(distinct([for r in var.resources : r.app_name if r.app_name != null]))
@@ -108,13 +93,6 @@ variable "resources" {
       try(trimspace(r.app_name), "-") != ""
     ])
     error_message = "app_name must be a non-empty, non-whitespace string; omit the field entirely for legacy (non-fleet) entries."
-  }
-  validation {
-    condition = alltrue([
-      for r in var.resources :
-      try(trimspace(r.process_group), "-") != ""
-    ])
-    error_message = "process_group must be a non-empty, non-whitespace string; omit the field to scope the heap alarm by AppName alone."
   }
 }
 
@@ -152,15 +130,9 @@ variable "default_cpu_threshold" {
 }
 
 variable "default_memory_threshold" {
-  description = "Default per-instance mem_used_percent guardrail threshold for fleet entries. Deliberately high: JVM hosts sit at 75-85% by design; this catches off-heap/native leaks and rogue processes, not heap pressure (heap_used does that)."
+  description = "Default per-instance mem_used_percent guardrail threshold for fleet entries. Deliberately high: JVM hosts sit at 75-85% by design; this catches native-memory leaks and rogue processes, not JVM memory pressure (the jmx module owns that)."
   type        = number
   default     = 90
-}
-
-variable "default_heap_threshold_pct" {
-  description = "Default heap_used threshold as a percent of heap_max_bytes for fleet entries"
-  type        = number
-  default     = 85
 }
 
 variable "default_disk_threshold" {
