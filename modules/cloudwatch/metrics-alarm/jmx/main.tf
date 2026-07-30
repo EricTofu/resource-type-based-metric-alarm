@@ -1,7 +1,11 @@
 #------------------------------------------------------------------------------
 # JMX / JVM Monitoring Module
-# Alarms on CloudWatch-Agent-emitted JVM metrics (namespace CWAgent, dim InstanceId).
-# See cwagent/jmx/ for the agent config that produces these metrics.
+# Alarms on CloudWatch-Agent-emitted JVM metrics via Metrics Insights, scoped by
+# the agent's AppName dimension and grouped per InstanceId — so one entry covers
+# a whole fleet and membership re-resolves at every evaluation. There is NO
+# instance lookup: duplicate Name tags (normal inside an ASG) are irrelevant, and
+# CodeDeploy blue/green churn needs no re-apply.
+# See cwagent/ec2-java/ for the agent config that produces these metrics.
 #------------------------------------------------------------------------------
 
 terraform {
@@ -17,10 +21,12 @@ locals {
   name_prefix   = "${var.project}-${var.env}-JMX"
   jmx_resources = { for res in var.resources : res.name => res }
 
-  # Resolved by the single data.aws_instances lookup below. "unresolved" only
-  # exists so the expression can't index-crash on a zero-match; the per-alarm
-  # preconditions fail the plan (with the resource name) before it is ever used.
-  instance_ids = { for k, d in data.aws_instances.by_name : k => try(d.ids[0], "unresolved") }
+  # Optional extra scope for hosts running more than one JVM. Empty string when
+  # unset, so the query strings below concatenate unconditionally.
+  pg_filter = {
+    for k, v in local.jmx_resources : k =>
+    v.process_group != null ? " AND ProcessGroupName = '${v.process_group}'" : ""
+  }
 
   default_severities = {
     heap_used = "WARN"
@@ -29,34 +35,10 @@ locals {
 }
 
 #------------------------------------------------------------------------------
-# Resolve EC2 instance IDs from Name tag (same pattern as the EC2 module).
-#------------------------------------------------------------------------------
-
-data "aws_instances" "by_name" {
-  for_each = local.jmx_resources
-
-  filter {
-    name   = "tag:Name"
-    values = [each.value.name]
-  }
-
-  filter {
-    name   = "instance-state-name"
-    values = ["running", "stopped"]
-  }
-}
-
-check "jmx_name_tag_uniqueness" {
-  assert {
-    condition = alltrue([
-      for k, d in data.aws_instances.by_name : length(d.ids) == 1
-    ])
-    error_message = "Every JMX resource must have exactly one running/stopped instance with a matching Name tag. Check: ${join(", ", [for k, d in data.aws_instances.by_name : "${k}=${length(d.ids)}" if length(d.ids) != 1])}"
-  }
-}
-
-#------------------------------------------------------------------------------
-# Heap used (%) — metric math 100 * used / max
+# Heap used (bytes) — byte threshold from the entry's known -Xmx.
+# CloudWatch math cannot divide two GROUP BY series arrays elementwise, so the
+# old 100*used/max ratio is not expressible per-instance; for a homogeneous
+# group with a known -Xmx the byte threshold is equivalent.
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "heap_used" {
@@ -65,47 +47,30 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
     if !contains(try(v.overrides.disabled_alarms, []), "heap_used")
   }
 
-  alarm_name = "${local.name_prefix}-[${each.value.name}]-HeapUsedPercent"
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-HeapUsedBytes"
   alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.heap_used)}]-${coalesce(
     try(each.value.overrides.description, null),
-    "${local.name_prefix}-[${each.value.name}]-HeapUsedPercent is in ALARM state"
+    "${local.name_prefix}-[${each.value.name}]-HeapUsedBytes is in ALARM state"
   )}"
 
   comparison_operator = "GreaterThanThreshold"
-  threshold = coalesce(
-    try(each.value.overrides.heap_threshold, null),
-    var.default_heap_threshold
+  threshold = floor(
+    coalesce(
+      try(each.value.overrides.heap_threshold, null),
+      var.default_heap_threshold
+    ) * each.value.heap_max_bytes / 100
   )
   evaluation_periods  = 3
   datapoints_to_alarm = 3
 
+  # GROUP BY InstanceId: one series per instance; ALARM when ANY series breaches.
+  # Plain FROM "CWAgent" (not SCHEMA) tolerates the extra dimensions the JMX
+  # receiver adds (per-collector `name`, ProcessGroupName).
   metric_query {
-    id          = "e1"
-    expression  = "100*m1/m2"
-    label       = "HeapUsedPercent"
+    id          = "q1"
     return_data = true
-  }
-
-  metric_query {
-    id = "m1"
-    metric {
-      namespace   = "CWAgent"
-      metric_name = "jvm.memory.heap.used"
-      stat        = "Average"
-      period      = 60
-      dimensions  = { InstanceId = local.instance_ids[each.key] }
-    }
-  }
-
-  metric_query {
-    id = "m2"
-    metric {
-      namespace   = "CWAgent"
-      metric_name = "jvm.memory.heap.max"
-      stat        = "Average"
-      period      = 60
-      dimensions  = { InstanceId = local.instance_ids[each.key] }
-    }
+    period      = 60
+    expression  = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -126,26 +91,23 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
       ResourceName = each.value.name
     }
   )
-
-  lifecycle {
-    precondition {
-      condition     = length(data.aws_instances.by_name[each.key].ids) == 1
-      error_message = "JMX resource '${each.key}' must match exactly one running/stopped EC2 instance by Name tag (matched ${length(data.aws_instances.by_name[each.key].ids)})."
-    }
-  }
 }
 
 #------------------------------------------------------------------------------
-# GC time (ms per minute) — DIFF of the cumulative jvm.gc.collections.elapsed counter.
-# A JVM restart resets the counter -> negative DIFF -> never breaches (alarm is '>').
+# GC time (ms per minute) — DIFF of the cumulative jvm_gc_collections_elapsed
+# counter. DIFF over a multi-series GROUP BY result returns one series per
+# instance (verified); the SQL must be its own query referenced by id, because
+# metric math cannot be nested inside a Metrics Insights query.
 #
-# The OTel JMX receiver emits this metric once per garbage collector (a `name`
-# dimension, e.g. "G1 Young Generation"/"G1 Old Generation"). The agent's
-# aggregation_dimensions [["InstanceId"]] rollup sums across collectors server-side,
-# so we read the {InstanceId} rollup with stat=Sum to get TOTAL time-in-GC (Maximum
-# would return only the single busiest collector). Safe against double-counting because
-# JMX collects at 60s = this period (one datapoint per period); if you shorten the JMX
-# collection interval below 60s, revisit (a summed cumulative counter would over-count).
+# SELECT SUM totals time-in-GC across the per-collector (`name` dimension)
+# series within each instance — the receiver emits one series per garbage
+# collector. Correct while JMX collects at 60s = this period (one datapoint per
+# period); if the collection interval drops below 60s, revisit (a summed
+# cumulative counter would over-count).
+#
+# A JVM restart resets the counter -> negative DIFF -> never breaches (alarm is
+# '>'). Fails safe: misses, never false-fires. The first datapoint of a series
+# has no predecessor and produces no value.
 #------------------------------------------------------------------------------
 
 resource "aws_cloudwatch_metric_alarm" "gc_time" {
@@ -170,20 +132,16 @@ resource "aws_cloudwatch_metric_alarm" "gc_time" {
 
   metric_query {
     id          = "e1"
-    expression  = "DIFF(m1)"
+    expression  = "DIFF(q1)"
     label       = "GcTimeMsPerMinute"
     return_data = true
   }
 
   metric_query {
-    id = "m1"
-    metric {
-      namespace   = "CWAgent"
-      metric_name = "jvm.gc.collections.elapsed"
-      stat        = "Sum"
-      period      = 60
-      dimensions  = { InstanceId = local.instance_ids[each.key] }
-    }
+    id          = "q1"
+    return_data = false
+    period      = 60
+    expression  = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -204,11 +162,4 @@ resource "aws_cloudwatch_metric_alarm" "gc_time" {
       ResourceName = each.value.name
     }
   )
-
-  lifecycle {
-    precondition {
-      condition     = length(data.aws_instances.by_name[each.key].ids) == 1
-      error_message = "JMX resource '${each.key}' must match exactly one running/stopped EC2 instance by Name tag (matched ${length(data.aws_instances.by_name[each.key].ids)})."
-    }
-  }
 }
