@@ -51,8 +51,11 @@ EOF
 #   name<TAB>app_name<TAB>heap_max_bytes<TAB>check_heap<TAB>check_gc<TAB>process_group
 # heap_max_bytes and process_group print "-" when unset; check_heap is 1
 # unless heap_used is in disabled_alarms, check_gc is 1 unless gc_time is.
-# Entries with no app_name are skipped with a warning — app_name is now the
-# required identity (no more Name-tag / InstanceId lookup).
+# Entries missing app_name or name are malformed (app_name is now the required
+# identity; name is required for alarm-naming/output purposes) and are instead
+# emitted as a "MALFORMED\t<message>" sentinel line — the caller (running
+# outside this subshell) counts those lines, echoes them as warnings, and
+# fails the preflight instead of silently reporting "no entries found".
 #
 # heap_max_bytes is an HCL expression, commonly written as a product
 # (12 * 1024 * 1024 * 1024). It is evaluated as a literal integer expression via
@@ -133,10 +136,17 @@ for e in entries:
     # \b anchors on the whole key: unanchored 'name' also matches app_name.
     nm = re.search(r'\bname\s*=\s*"([^"]+)"', e)
     ap = re.search(r'\bapp_name\s*=\s*"([^"]+)"', e)
-    if not nm:
-        continue
+    if not nm and not ap:
+        continue  # neither identifying field present; nothing to name the warning after
     if not ap:
-        print(f"app_name is required; skipping entry with no app_name (name={nm.group(1) if nm else '?'})", file=sys.stderr)
+        # Emitted on stdout (not just stderr) as a MALFORMED sentinel: this
+        # function runs inside a $(...) subshell, so a plain stderr warning
+        # cannot flip FAILED in the parent shell. The caller counts these
+        # lines and fails the preflight instead of silently skipping.
+        print(f"MALFORMED\tapp_name is required; skipping entry with no app_name (name={nm.group(1)})")
+        continue
+    if not nm:
+        print(f"MALFORMED\tname is required; skipping entry with app_name={ap.group(1)} but no name")
         continue
     hm = re.search(r'\bheap_max_bytes\s*=\s*([^,\n#}]+)', e)
     pg = re.search(r'\bprocess_group\s*=\s*"([^"]+)"', e)
@@ -155,9 +165,28 @@ for e in entries:
 EOF
 }
 
-ENTRIES=$(extract_jmx_entries)
+RAW_ENTRIES=$(extract_jmx_entries)
 
-if [[ -z "$ENTRIES" ]]; then
+# Split the "MALFORMED\t<message>" sentinels (see extract_jmx_entries above)
+# out of the real entry lines. A malformed entry must not be able to make the
+# script look clean — it is reported as a warning here (parent shell, not the
+# parser's subshell) and counted so it can flip FAILED even when it leaves
+# zero valid entries behind.
+MALFORMED_COUNT=0
+ENTRIES=""
+if [[ -n "$RAW_ENTRIES" ]]; then
+  while IFS= read -r LINE; do
+    if [[ "$LINE" == MALFORMED$'\t'* ]]; then
+      echo "WARNING: ${LINE#MALFORMED$'\t'}" >&2
+      MALFORMED_COUNT=$((MALFORMED_COUNT + 1))
+    else
+      ENTRIES+="$LINE"$'\n'
+    fi
+  done <<< "$RAW_ENTRIES"
+fi
+ENTRIES="${ENTRIES%$'\n'}"
+
+if [[ -z "$ENTRIES" && "$MALFORMED_COUNT" -eq 0 ]]; then
   echo "No jmx_resources found in $TFVARS — skipping."
   exit 0
 fi
@@ -165,6 +194,10 @@ fi
 [[ -n "$REGION" ]] || { echo "Error: aws_region not found in $TFVARS." >&2; exit 1; }
 
 FAILED=0
+if [[ "$MALFORMED_COUNT" -gt 0 ]]; then
+  echo "ERROR: $MALFORMED_COUNT malformed jmx_resources entry/entries in $TFVARS (see WARNING lines above) — app_name and name are both required." >&2
+  FAILED=1
+fi
 START=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')
 END=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
@@ -226,6 +259,10 @@ check_query() {
 
 CWAGENT_HINT="Deploy the cwagent/ec2-java/ config (AppName dimension on the jmx plugin) and expose the JMX endpoint on the JVM."
 
+# ENTRIES can be empty here (all entries were malformed) while MALFORMED_COUNT
+# still failed the run above; guard the loop so an empty ENTRIES doesn't feed
+# `read` one blank line and iterate once with everything unset.
+if [[ -n "$ENTRIES" ]]; then
 while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
   echo "--- JMX entry '$NAME' (AppName=$APP)"
 
@@ -261,8 +298,30 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
       echo "WARNING: [$NAME] jvm_memory_heap_max query returned no data; cannot sanity-check heap_max_bytes=$HEAP_MAX." >&2
       FAILED=1
     else
-      WITHIN=$(python3 -c "import sys; a=float(sys.argv[1]); e=float(sys.argv[2]); print(1 if abs(a-e)/e <= 0.10 else 0)" "$ACTUAL_MAX" "$HEAP_MAX")
-      if [[ "$WITHIN" == "1" ]]; then
+      # e<=0 (zero or negative heap_max_bytes) is guarded inside python: it
+      # would otherwise raise ZeroDivisionError (e=0, killing the whole script
+      # under set -e, never reaching later entries) or silently report a
+      # false OK (e<0 makes abs(a-e)/e negative, which is <= 0.10). The RC is
+      # also captured so any other python failure degrades to a warning
+      # instead of aborting the script, matching the RC-capture fix applied
+      # to the insights_latest call just above.
+      WITHIN_RC=0
+      WITHIN=$(python3 -c "
+import sys
+a = float(sys.argv[1])
+e = float(sys.argv[2])
+if e <= 0:
+    print('invalid')
+else:
+    print(1 if abs(a - e) / e <= 0.10 else 0)
+" "$ACTUAL_MAX" "$HEAP_MAX") || WITHIN_RC=$?
+      if [[ $WITHIN_RC -ne 0 ]]; then
+        echo "WARNING: [$NAME] could not evaluate the heap_max_bytes comparison (python exited $WITHIN_RC); heap_max_bytes=$HEAP_MAX, observed jvm_memory_heap_max=$ACTUAL_MAX." >&2
+        FAILED=1
+      elif [[ "$WITHIN" == "invalid" ]]; then
+        echo "WARNING: [$NAME] heap_max_bytes=$HEAP_MAX is not a positive number; cannot sanity-check against observed jvm_memory_heap_max=$ACTUAL_MAX. Fix tfvars — the heap alarm threshold derives from this." >&2
+        FAILED=1
+      elif [[ "$WITHIN" == "1" ]]; then
         echo "OK: [$NAME] heap_max_bytes=$HEAP_MAX matches observed jvm_memory_heap_max=$ACTUAL_MAX (±10%)."
       else
         echo "WARNING: [$NAME] heap_max_bytes=$HEAP_MAX but observed jvm_memory_heap_max=$ACTUAL_MAX (>10% off). Fix tfvars or -Xmx; the heap alarm threshold derives from this." >&2
@@ -273,5 +332,6 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
     echo "WARNING: [$NAME] could not parse heap_max_bytes as a literal expression; skipping the heap_max sanity check." >&2
   fi
 done <<< "$ENTRIES"
+fi
 
 exit "$FAILED"

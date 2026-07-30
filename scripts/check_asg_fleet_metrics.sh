@@ -190,7 +190,7 @@ check_query() {
 }
 
 while IFS=$'\t' read -r NAME APP CHECK_CPU; do
-  echo "--- Fleet entry '$NAME' (AppName=$APP)"
+  echo "--- Fleet entry '$NAME' (${APP_TAG_KEY}=$APP)"
 
   COUNT=$(aws ec2 describe-instances \
     --region "$REGION" \
