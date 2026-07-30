@@ -9,7 +9,7 @@ variable "env" {
 }
 
 variable "resources" {
-  description = "Java host groups to monitor, identified by the CWAgent AppName dimension (see cwagent/ec2-java/). One entry may cover several instances — ASG fleet members, or interchangeable standalone hosts sharing an AppName — because alarms fan out per InstanceId at evaluation time. `name` is a label for alarm naming and output keys only; it is NOT a Name-tag lookup."
+  description = "Java host groups to monitor, identified by the CWAgent AppName dimension (see cwagent/ec2-java/). One entry may cover several instances — ASG fleet members, or interchangeable standalone hosts sharing an AppName — because alarms fan out per InstanceId at evaluation time. `name` is a label for alarm naming and output keys only; it is NOT a Name-tag lookup. One entry covers one JVM per host: app_name is validated unique across entries, so a host running a second JVM cannot be given an entry of its own, and process_group narrows an existing entry's queries rather than permitting an additional entry under the same app_name."
   type = list(object({
     name           = string
     app_name       = string
