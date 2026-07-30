@@ -369,9 +369,29 @@ the alarm. It also stops hardcoding `AppName` for native-metric queries and
 reads `app_tag_key`, closing the residual noted at the end of the previous
 branch.
 
-Both scripts use `list-metrics --recently-active PT3H` as a first-line
-diagnostic: that flag's window is the same one Metrics Insights can see, so a
-metric absent from it is not queryable regardless of syntax.
+Both scripts use `list-metrics --recently-active PT3H` as a first-line diagnostic
+**on the no-data path**: that flag's window is the same one Metrics Insights can
+see, so a metric absent from it is not queryable regardless of syntax. It is what
+separates "the metric does not exist" (agent config not deployed, name not
+renamed) from "the metric exists but the `WHERE` filter matched nothing" — the
+most common confusion during the rename rollout. It needs
+`cloudwatch:ListMetrics` on the preflight role in addition to
+`cloudwatch:GetMetricData`; if the call fails the scripts say so rather than
+inferring anything from it.
+
+Both scripts read each `GROUP BY InstanceId` result set as a set, not as
+`MetricDataResults[0]`: results come back in no guaranteed order and Metrics
+Insights matches any series with data in ~3h — wider than the scripts' 1h window —
+so an instance terminated shortly before the run returns with an empty `Values`
+array and must not be mistaken for "the query returned nothing". They report the
+first result that has a datapoint, plus the number of series returned so it can be
+compared against `desired_capacity`.
+
+Both scripts fail (exit 1) when the tfvars parser matched a `<var>_resources = [`
+but extracted no entries from it. Exiting 0 having run zero checks is reserved for
+a genuinely absent variable or a literal empty list. Line comments are stripped
+before the parsers' brace/bracket counting, so neither a commented-out entry nor an
+unbalanced brace inside a comment can change what is considered live.
 
 ## Verified during design
 

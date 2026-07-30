@@ -6,14 +6,14 @@
         "metrics": [
           [
             {
-              "expression": "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "expression": "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
               "id": "q1",
               "label": "Heap used"
             }
           ],
           [
             {
-              "expression": "SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1'",
+              "expression": "SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = 'billing-batch'",
               "id": "q2",
               "label": "Heap max"
             }
@@ -21,7 +21,7 @@
         ],
         "period": 60,
         "region": "ap-northeast-1",
-        "title": "billing-java-app-1 — Heap (bytes)",
+        "title": "billing-batch-java — Heap (bytes)",
         "view": "timeSeries",
         "yAxis": {
           "left": {
@@ -47,7 +47,7 @@
           ],
           [
             {
-              "expression": "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "expression": "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
               "id": "q1",
               "visible": false
             }
@@ -62,7 +62,7 @@
           ],
           [
             {
-              "expression": "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "expression": "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
               "id": "q2",
               "visible": false
             }
@@ -70,7 +70,7 @@
         ],
         "period": 60,
         "region": "ap-northeast-1",
-        "title": "billing-java-app-1 — GC time (ms/min)",
+        "title": "billing-batch-java — GC time (ms/min)",
         "view": "timeSeries",
         "yAxis": {
           "left": {
@@ -89,14 +89,14 @@
         "metrics": [
           [
             {
-              "expression": "SELECT AVG(jvm_threads_count) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "expression": "SELECT AVG(jvm_threads_count) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
               "id": "q1",
               "label": "Threads"
             }
           ],
           [
             {
-              "expression": "SELECT AVG(jvm_classes_loaded) FROM \"CWAgent\" WHERE AppName = 'billing-java-app-1' GROUP BY InstanceId",
+              "expression": "SELECT AVG(jvm_classes_loaded) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
               "id": "q2",
               "label": "Classes loaded",
               "yAxis": "right"
@@ -105,7 +105,7 @@
         ],
         "period": 60,
         "region": "ap-northeast-1",
-        "title": "billing-java-app-1 — Threads & classes",
+        "title": "billing-batch-java — Threads & classes",
         "view": "timeSeries",
         "yAxis": {
           "left": {

@@ -21,9 +21,12 @@ Three widgets per host group:
 Two ways to use it:
 
 ### Import the static JSON (console)
-`dashboards/jmx-jvm.json` is a snapshot for a single host group (`AppName =
-'billing-java-app-1'`). To reuse it for a different group, substitute that `AppName`
-value in every query's `expression` and the `region` fields, then create the dashboard:
+`dashboards/jmx-jvm.json` is a snapshot for a single host group — the
+`billing-batch-java` entry of `stacks/projects/billing/dev/terraform.tfvars.example`,
+i.e. `name = "billing-batch-java"` (widget titles) and `app_name = "billing-batch"`
+(`AppName` in every query). To reuse it for a different group, substitute that
+`AppName` value in every query's `expression`, the label in the `title` fields, and
+the `region` fields, then create the dashboard:
 
     aws cloudwatch put-dashboard --dashboard-name my-jvm \
       --dashboard-body file://dashboards/jmx-jvm.json
@@ -51,9 +54,15 @@ alarms watch, using the alarm module's `dashboard_targets` output — no hardcod
 
 `dashboards/jmx-jvm.json` is a **generated snapshot** — treat the module as the single
 source of truth and regenerate the file (work machine, after apply) whenever the module
-layout changes:
+layout changes. `dashboard_json` is compact `jsonencode` output, so it goes through `jq`
+to land in the committed pretty form:
 
-    terraform -chdir=stacks/projects/billing/dev output -raw jmx_dashboard_json > dashboards/jmx-jvm.json
+    terraform -chdir=stacks/projects/billing/dev output -raw jmx_dashboard_json \
+      | jq . > dashboards/jmx-jvm.json
 
 (then check the diff only changes what you intended — the rendered body already carries
-the real `AppName` value(s); there is no instance-id placeholder to re-insert).
+the real `AppName` value(s); there is no instance-id placeholder to re-insert. `jq .` is
+a byte-stable round trip on this file, so the only diff should be your intended change.
+If the stack's `jmx_resources` has more than one entry the output covers all of them,
+where the committed snapshot is deliberately a single host group — trim or re-render with
+one target.)

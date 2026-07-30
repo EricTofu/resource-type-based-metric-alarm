@@ -34,6 +34,8 @@ fi
 REGION=$(python3 - "$TFVARS" <<'EOF'
 import re, sys
 content = open(sys.argv[1]).read()
+# Line comments stripped first so a commented-out aws_region cannot win.
+content = re.sub(r'(?m)#.*$|//.*$', '', content)
 m = re.search(r'aws_region\s*=\s*"([^"]+)"', content)
 print(m.group(1) if m else "")
 EOF
@@ -45,6 +47,14 @@ ENTRIES=$(python3 - "$TFVARS" "ec2_resources" <<'EOF'
 import re, sys
 content = open(sys.argv[1]).read()
 list_var = sys.argv[2]
+
+# Strip line comments BEFORE the bracket/brace counting below: both scans are
+# plain character counters over raw text, so an unbalanced `{` inside a comment
+# truncated the list scan and a *balanced* commented-out entry was parsed as live.
+# No tfvars in this repo puts `#` or `//` inside a string literal, which is the
+# only thing this would corrupt. HCL `/* */` block comments are not used here and
+# are not handled.
+content = re.sub(r'(?m)#.*$|//.*$', '', content)
 
 start = re.search(rf'{list_var}\s*=\s*\[', content)
 if not start:

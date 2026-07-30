@@ -17,6 +17,11 @@
 #
 # A failed AWS CLI call is reported as an ERROR with the CLI's own message (the
 # preflight role needs cloudwatch:GetMetricData) — never silently as "no data".
+# On a no-data result the script also runs `list-metrics --recently-active PT3H`
+# (needs cloudwatch:ListMetrics) as a first-line diagnostic: that flag's window is
+# the same ~3h one Metrics Insights can see, so it separates "the metric does not
+# exist" (agent config not deployed / name not renamed) from "it exists but the
+# AppName/ProcessGroupName filter matched nothing".
 #
 # Usage: check_jmx_metrics.sh --tfvars <path>
 # Example: check_jmx_metrics.sh --tfvars stacks/projects/billing/dev/terraform.tfvars
@@ -42,6 +47,8 @@ fi
 REGION=$(python3 - "$TFVARS" <<'EOF'
 import re, sys
 content = open(sys.argv[1]).read()
+# Line comments stripped first so a commented-out aws_region cannot win.
+content = re.sub(r'(?m)#.*$|//.*$', '', content)
 m = re.search(r'aws_region\s*=\s*"([^"]+)"', content)
 print(m.group(1) if m else "")
 EOF
@@ -55,6 +62,12 @@ EOF
 # identity; name is required for alarm-naming/output purposes) and are instead
 # emitted as:
 #   MALFORMED<TAB>message
+# Plus exactly one line describing how the jmx_resources list itself parsed:
+#   STATUS<TAB>absent|empty|unterminated|unbalanced-braces|unparsed|parsed:<n>
+# The caller turns everything except `absent` and `empty` into a hard failure
+# when no ENTRY line came out, so a parser that silently extracts nothing can no
+# longer be reported as a pass (see the skip path below).
+#
 # The type column is a hardcoded Python string literal, never built from
 # tfvars content, so it cannot collide with a user-supplied field — e.g. a
 # resource whose `name` is literally "MALFORMED" still emits ENTRY\tMALFORMED\t...
@@ -67,11 +80,24 @@ EOF
 # a restricted ast walk (int literals and + - * only, never eval); anything else
 # is emitted as "?" so the caller can skip the sanity check with a warning
 # instead of comparing a truncated number. "-" (key absent) and "?" (unparseable)
-# differ deliberately: only the absent case is silent.
+# both warn: a heap_max_bytes that cannot be reconciled is never silent, because
+# the heap alarm's byte threshold is derived from it.
 extract_jmx_entries() {
 python3 - "$TFVARS" <<'EOF'
 import ast, re, sys
 content = open(sys.argv[1]).read()
+
+# Strip line comments BEFORE any bracket/brace counting. Both scans below are
+# plain character counters over raw text, so without this:
+#   (a) an unbalanced `{` inside a comment inside the list ended the array scan
+#       early and the script reported success having run zero checks, and
+#   (b) a *balanced* commented-out entry was parsed as live, so the run queried a
+#       decommissioned AppName and failed.
+# Verified that no tfvars in this repo puts `#` or `//` inside a string literal,
+# which is the only thing this would corrupt; if one ever does, this needs a real
+# HCL tokenizer. HCL `/* */` block comments are not used anywhere here and are
+# NOT handled — the STATUS/"extracted nothing" failure below is the backstop.
+content = re.sub(r'(?m)#.*$|//.*$', '', content)
 
 
 def literal_int(expr):
@@ -107,19 +133,24 @@ def literal_int(expr):
 
 start = re.search(r'jmx_resources\s*=\s*\[', content)
 if not start:
+    print("STATUS\tabsent")
     sys.exit(0)
 
-i, depth, body = start.end(), 1, []
-while i < len(content) and depth > 0:
+i, depth, body, terminated = start.end(), 1, [], False
+while i < len(content):
     c = content[i]
     if c == '[':
         depth += 1
     elif c == ']':
         depth -= 1
         if depth == 0:
+            terminated = True
             break
     body.append(c)
     i += 1
+if not terminated:
+    print("STATUS\tunterminated")
+    sys.exit(0)
 body = ''.join(body)
 
 entries, depth, cur = [], 0, []
@@ -137,12 +168,25 @@ for c in body:
     if depth >= 1:
         cur.append(c)
 
+if depth != 0:
+    print("STATUS\tunbalanced-braces")
+    sys.exit(0)
+if not entries:
+    print("STATUS\tempty" if not body.strip() else "STATUS\tunparsed")
+    sys.exit(0)
+print(f"STATUS\tparsed:{len(entries)}")
+
 for e in entries:
     # \b anchors on the whole key: unanchored 'name' also matches app_name.
     nm = re.search(r'\bname\s*=\s*"([^"]+)"', e)
     ap = re.search(r'\bapp_name\s*=\s*"([^"]+)"', e)
     if not nm and not ap:
-        continue  # neither identifying field present; nothing to name the warning after
+        # Neither identifying field present, so there is nothing to name the
+        # warning after — but it is still an object inside jmx_resources, and
+        # skipping it silently is how "matched but extracted nothing" used to
+        # become a pass. Report it and let the caller fail the run.
+        print("MALFORMED\tan entry object has neither name nor app_name (both are required)")
+        continue
     if not ap:
         # Type column emitted first, hardcoded here (never interpolated from
         # tfvars content) — see the caller for why this makes the
@@ -184,6 +228,7 @@ RAW_ENTRIES=$(extract_jmx_entries)
 # string prefix on the whole line — that was the round-1 bug this replaced.
 MALFORMED_COUNT=0
 ENTRIES=""
+PARSE_STATUS=""
 if [[ -n "$RAW_ENTRIES" ]]; then
   while IFS=$'\t' read -r TYPE REST; do
     case "$TYPE" in
@@ -194,14 +239,45 @@ if [[ -n "$RAW_ENTRIES" ]]; then
       ENTRY)
         ENTRIES+="$REST"$'\n'
         ;;
+      STATUS)
+        PARSE_STATUS="$REST"
+        ;;
     esac
   done <<< "$RAW_ENTRIES"
 fi
 ENTRIES="${ENTRIES%$'\n'}"
 
+# Exiting 0 having run no checks is only legitimate when there is genuinely
+# nothing to check: no jmx_resources block at all, or a literal empty list.
+# Anything else — a truncated/unbalanced list, a body the entry splitter could
+# not turn into objects, or objects that yielded neither an ENTRY nor a
+# MALFORMED line — means the parser did not understand the config, and since
+# both JMX alarms are treat_missing_data=notBreaching this script is the only
+# guard between a typo'd app_name and an alarm that stays green forever. Fail
+# loudly instead of passing silently.
 if [[ -z "$ENTRIES" && "$MALFORMED_COUNT" -eq 0 ]]; then
-  echo "No jmx_resources found in $TFVARS — skipping."
-  exit 0
+  case "$PARSE_STATUS" in
+    absent)
+      echo "No jmx_resources block in $TFVARS — skipping."
+      exit 0
+      ;;
+    empty)
+      echo "jmx_resources is an empty list in $TFVARS — skipping."
+      exit 0
+      ;;
+    unterminated)
+      echo "ERROR: jmx_resources in $TFVARS is not terminated (no matching ']'). Refusing to report success without running any check — fix the tfvars syntax." >&2
+      exit 1
+      ;;
+    unbalanced-braces)
+      echo "ERROR: jmx_resources in $TFVARS has unbalanced '{'/'}' — the entry parser could not split it. Refusing to report success without running any check — fix the tfvars syntax." >&2
+      exit 1
+      ;;
+    *)
+      echo "ERROR: jmx_resources was found in $TFVARS but no entries could be extracted from it (parser status: ${PARSE_STATUS:-none}). Refusing to report success without running any check — fix the tfvars, or the parser in this script." >&2
+      exit 1
+      ;;
+  esac
 fi
 
 [[ -n "$REGION" ]] || { echo "Error: aws_region not found in $TFVARS." >&2; exit 1; }
@@ -220,13 +296,22 @@ CLI_ERR_FILE=$(mktemp)
 trap 'rm -f "$CLI_ERR_FILE"' EXIT
 
 # Runs one Metrics Insights SELECT via get-metric-data at the given period and
-# prints the latest value, or nothing when the query returned no datapoints.
-# Returns the AWS CLI's exit status so callers can tell a failed call (e.g.
-# AccessDenied) apart from an empty result; the CLI's stderr lands in
-# $CLI_ERR_FILE.
+# prints "<series-count><TAB><latest-value>". <latest-value> is empty when no
+# returned series had a datapoint. Returns the AWS CLI's exit status so callers
+# can tell a failed call (e.g. AccessDenied) apart from an empty result; the CLI's
+# stderr lands in $CLI_ERR_FILE.
+#
+# Why not MetricDataResults[0]: a GROUP BY InstanceId query returns one result
+# per matched series in no guaranteed order, and Metrics Insights matches any
+# series with data in roughly the last 3h — wider than this script's 1h window.
+# So an instance terminated 90 minutes ago (routine right after a blue/green
+# deploy) comes back with an empty Values array, and if it sorted first the
+# script reported "no data" while the live fleet was reporting normally. The
+# filter takes the first result that actually HAS a datapoint. The series count
+# is printed alongside so an operator can compare it with desired_capacity.
 insights_latest() {
   local EXPRESSION="$1" PERIOD="$2"
-  local OUT RC
+  local OUT RC COUNT VALUE
   : > "$CLI_ERR_FILE"
   set +e
   OUT=$(aws cloudwatch get-metric-data \
@@ -234,12 +319,48 @@ insights_latest() {
     --start-time "$START" \
     --end-time "$END" \
     --metric-data-queries "[{\"Id\":\"q1\",\"Expression\":$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$EXPRESSION"),\"Period\":$PERIOD}]" \
-    --query "MetricDataResults[0].Values[0]" \
+    --query "[length(MetricDataResults), MetricDataResults[?length(Values) > \`0\`] | [0].Values[0]]" \
     --output text 2>"$CLI_ERR_FILE")
   RC=$?
   set -e
   [[ $RC -eq 0 ]] || return "$RC"
-  printf '%s\n' "$OUT" | grep -v '^None$' || true
+  # `--output text` renders a flat scalar list as one tab-separated line; the
+  # tr collapses any whitespace so a per-line rendering parses identically.
+  read -r COUNT VALUE <<< "$(printf '%s' "$OUT" | tr '\n\t' '  ')"
+  if [[ "$VALUE" == "None" ]]; then
+    VALUE=""
+  fi
+  printf '%s\t%s\n' "${COUNT:-0}" "$VALUE"
+}
+
+# On a no-data result, separate "the metric does not exist at all" from "it
+# exists but the WHERE filter matched nothing" — the most common confusion
+# during the snake_case rename / AppName rollout. --recently-active PT3H is the
+# same ~3h window Metrics Insights itself can see, so a metric absent from it is
+# not queryable regardless of query syntax.
+#
+# The metric name is deliberately NOT echoed in these lines: the no-data WARNING
+# right above already carries the full query, and keeping each JVM metric name to
+# one occurrence per failing check preserves `grep <metric> ` on this script's
+# output as a count of failures.
+list_metrics_diag() {
+  local NAMESPACE="$1" METRIC="$2"
+  [[ -n "$NAMESPACE" && -n "$METRIC" ]] || return 0
+  local COUNT RC=0
+  COUNT=$(aws cloudwatch list-metrics \
+    --namespace "$NAMESPACE" \
+    --metric-name "$METRIC" \
+    --recently-active PT3H \
+    --region "$REGION" \
+    --query "length(Metrics)" \
+    --output text 2>/dev/null) || RC=$?
+  if [[ $RC -ne 0 || -z "$COUNT" ]]; then
+    echo "  Diagnostic: list-metrics --recently-active PT3H could not be run (the preflight role also needs cloudwatch:ListMetrics)." >&2
+  elif [[ "$COUNT" == "0" ]]; then
+    echo "  Diagnostic: list-metrics --recently-active PT3H found 0 recently-active series for this metric in $NAMESPACE — the metric itself is absent (agent config not deployed, or the JVM metrics not renamed to snake_case), not merely mis-filtered." >&2
+  else
+    echo "  Diagnostic: list-metrics --recently-active PT3H found $COUNT recently-active series for this metric in $NAMESPACE — the metric exists, so it is the WHERE filter (AppName / ProcessGroupName) that matched nothing." >&2
+  fi
 }
 
 # Prints the failed call's real error plus an IAM-shaped hint. AccessDenied is
@@ -254,19 +375,24 @@ report_cli_failure() {
   echo "  Hint: the preflight role (PREFLIGHT_READ_ROLE_ARN) needs cloudwatch:GetMetricData. Fix the IAM policy before reading anything into the metric checks below." >&2
 }
 
-# check_query <name> <label> <expression> <hint> [period]
+# check_query <name> <label> <expression> <hint> [period] [namespace] [metric]
+# namespace/metric are only used for the list-metrics no-data diagnostic.
 check_query() {
-  local NAME="$1" LABEL="$2" EXPRESSION="$3" HINT="$4" PERIOD="${5:-300}"
-  local VALUE RC=0
-  VALUE=$(insights_latest "$EXPRESSION" "$PERIOD") || RC=$?
+  local NAME="$1" LABEL="$2" EXPRESSION="$3" HINT="$4" PERIOD="${5:-300}" NAMESPACE="${6:-}" METRIC="${7:-}"
+  local RESULT COUNT VALUE RC=0
+  RESULT=$(insights_latest "$EXPRESSION" "$PERIOD") || RC=$?
   if [[ $RC -ne 0 ]]; then
     report_cli_failure "$NAME" "$LABEL" "$RC"
     FAILED=1
-  elif [[ -z "$VALUE" ]]; then
-    echo "WARNING: [$NAME] $LABEL query returned no data. $HINT Query: $EXPRESSION" >&2
+    return 0
+  fi
+  IFS=$'\t' read -r COUNT VALUE <<< "$RESULT"
+  if [[ -z "$VALUE" ]]; then
+    echo "WARNING: [$NAME] $LABEL query returned no data ($COUNT series matched). $HINT Query: $EXPRESSION" >&2
+    list_metrics_diag "$NAMESPACE" "$METRIC"
     FAILED=1
   else
-    echo "OK: [$NAME] $LABEL (latest: $VALUE)"
+    echo "OK: [$NAME] $LABEL (latest: $VALUE; $COUNT series returned — compare with the expected instance count)"
   fi
 }
 
@@ -287,13 +413,13 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
   if [[ "$CHECK_HEAP" == "1" ]]; then
     check_query "$NAME" "jvm_memory_heap_used" \
       "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId" \
-      "$CWAGENT_HINT" 60
+      "$CWAGENT_HINT" 60 "CWAgent" "jvm_memory_heap_used"
   fi
 
   if [[ "$CHECK_GC" == "1" ]]; then
     check_query "$NAME" "jvm_gc_collections_elapsed" \
       "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId" \
-      "$CWAGENT_HINT" 60
+      "$CWAGENT_HINT" 60 "CWAgent" "jvm_gc_collections_elapsed"
   fi
 
   if [[ "$CHECK_HEAP" == "1" && "$HEAP_MAX" != "-" && "$HEAP_MAX" != "?" ]]; then
@@ -303,12 +429,14 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
     # failure still leaves both in the transcript for diagnosis.
     echo "    heap_max_bytes resolved to $HEAP_MAX; Query [jvm_memory_heap_max]: $HEAP_MAX_QUERY"
     RC=0
-    ACTUAL_MAX=$(insights_latest "$HEAP_MAX_QUERY" 60) || RC=$?
+    MAX_RESULT=$(insights_latest "$HEAP_MAX_QUERY" 60) || RC=$?
+    IFS=$'\t' read -r MAX_COUNT ACTUAL_MAX <<< "${MAX_RESULT:-}"
     if [[ $RC -ne 0 ]]; then
       report_cli_failure "$NAME" "jvm_memory_heap_max" "$RC"
       FAILED=1
     elif [[ -z "$ACTUAL_MAX" ]]; then
-      echo "WARNING: [$NAME] jvm_memory_heap_max query returned no data; cannot sanity-check heap_max_bytes=$HEAP_MAX." >&2
+      echo "WARNING: [$NAME] jvm_memory_heap_max query returned no data ($MAX_COUNT series matched); cannot sanity-check heap_max_bytes=$HEAP_MAX." >&2
+      list_metrics_diag "CWAgent" "jvm_memory_heap_max"
       FAILED=1
     else
       # e<=0 (zero or negative heap_max_bytes) is guarded inside python: it
@@ -343,6 +471,11 @@ else:
     fi
   elif [[ "$CHECK_HEAP" == "1" && "$HEAP_MAX" == "?" ]]; then
     echo "WARNING: [$NAME] could not parse heap_max_bytes as a literal expression; skipping the heap_max sanity check." >&2
+  elif [[ "$CHECK_HEAP" == "1" ]]; then
+    # HEAP_MAX == "-": the key is absent. The module rejects that config
+    # (heap_max_bytes is required unless heap_used is disabled), but say so here
+    # too rather than skipping the ±10% reconciliation in silence.
+    echo "WARNING: [$NAME] heap_used is enabled but heap_max_bytes is not set; skipping the heap_max sanity check (the module will reject this config — heap_max_bytes is the heap alarm's byte threshold)." >&2
   fi
 done <<< "$ENTRIES"
 fi

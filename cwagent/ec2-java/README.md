@@ -19,8 +19,9 @@ Parameter Store copies when the contract changes.
 ## Contract (floor, not ceiling)
 
 Consumed by `modules/cloudwatch/metrics-alarm/asg` (fleet mode),
-`modules/cloudwatch/metrics-alarm/ec2` (memory/disk), and
-`modules/cloudwatch/metrics-alarm/jmx` (standalone JVM alarms):
+`modules/cloudwatch/metrics-alarm/ec2` (memory/disk),
+`modules/cloudwatch/metrics-alarm/jmx` (JVM heap/GC alarms — `AppName`-scoped, so
+they cover fleet and standalone hosts alike) and `modules/cloudwatch/dashboard/jmx`:
 
 - Namespace `CWAgent`; 60s collection interval.
 - Dimension `AppName` (static, plugin-level) on **every** metrics plugin —
@@ -47,11 +48,19 @@ Consumed by `modules/cloudwatch/metrics-alarm/asg` (fleet mode),
 
 1. Parameter Store config created/updated from this template
 2. Java process exposes the JMX endpoint
-3. Agent restarted; metrics flowing (verify with the preflight script)
-4. Alarms applied (`asg_resources` fleet entry / `ec2_resources` entry)
+3. Agent restarted; metrics flowing. Verify with the preflight scripts that match
+   the entries you are about to add — `scripts/check_asg_fleet_metrics.sh`
+   (capacity/cpu/memory/disk), `scripts/check_ec2_mem_metric.sh` (standalone
+   memory/disk) and `scripts/check_jmx_metrics.sh` (JVM heap/GC).
+4. Alarms applied. JVM alarms are their own list — an ASG or EC2 entry alone gives
+   you no heap/GC coverage:
+   - `asg_resources` fleet entry (capacity, cpu, memory, disk), or
+     `ec2_resources` entry for a standalone host, **and**
+   - `jmx_resources` entry (`heap_used`, `gc_time`) with the same `app_name`, plus
+     `heap_max_bytes` = the JVM's `-Xmx` in bytes.
 
-Related: `cwagent/jmx/` is the older standalone-JMX-only contract; hosts
-adopting this template satisfy it too.
+Related: `cwagent/jmx/` is the older JMX-only contract. It appends no `AppName`, so
+hosts on it are invisible to the JMX alarms; adopting this template supersedes it.
 
 ## Migrating a host group to the renamed metrics
 
