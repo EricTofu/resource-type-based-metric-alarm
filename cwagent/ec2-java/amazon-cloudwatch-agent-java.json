@@ -24,19 +24,19 @@
     "metrics_collected": {
       "jmx": [
         {
-          "endpoint": "<jmx-endpoint e.g. localhost:9999>",
+          "endpoint": "<jmx-endpoint>",
           "jvm": {
             "measurement": [
-              "jvm.classes.loaded",
-              "jvm.gc.collections.count",
-              "jvm.gc.collections.elapsed",
-              "jvm.memory.heap.committed",
-              "jvm.memory.heap.max",
-              "jvm.memory.heap.used",
-              "jvm.memory.nonheap.committed",
-              "jvm.memory.nonheap.max",
-              "jvm.memory.nonheap.used",
-              "jvm.threads.count"
+              { "name": "jvm.classes.loaded",          "rename": "jvm_classes_loaded" },
+              { "name": "jvm.gc.collections.count",    "rename": "jvm_gc_collections_count" },
+              { "name": "jvm.gc.collections.elapsed",  "rename": "jvm_gc_collections_elapsed" },
+              { "name": "jvm.memory.heap.committed",   "rename": "jvm_memory_heap_committed" },
+              { "name": "jvm.memory.heap.max",         "rename": "jvm_memory_heap_max" },
+              { "name": "jvm.memory.heap.used",        "rename": "jvm_memory_heap_used" },
+              { "name": "jvm.memory.nonheap.committed","rename": "jvm_memory_nonheap_committed" },
+              { "name": "jvm.memory.nonheap.max",      "rename": "jvm_memory_nonheap_max" },
+              { "name": "jvm.memory.nonheap.used",     "rename": "jvm_memory_nonheap_used" },
+              { "name": "jvm.threads.count",           "rename": "jvm_threads_count" }
             ]
           },
           "append_dimensions": {

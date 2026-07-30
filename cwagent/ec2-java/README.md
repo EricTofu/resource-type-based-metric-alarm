@@ -13,7 +13,7 @@ Parameter Store copies when the contract changes.
 |---|---|---|
 | `<app-name>` | Fleet identity. MUST equal the `app_name` in tfvars and the `AppName` tag on the EC2 instances/ASG. One AppName = one fleet. | `live` |
 | `<process-group>` | Java process label within the fleet (JMX dimension `ProcessGroupName`). | `chat-server-tomcat` |
-| `<jmx-endpoint e.g. localhost:9999>` | JMX RMI endpoint the JVM exposes. The Java process must be started with JMX remote enabled on this port. | `localhost:9999` |
+| `<jmx-endpoint>` | JMX RMI endpoint the JVM exposes. The Java process must be started with JMX remote enabled on this port. | `localhost:9999` |
 | `<app-log-path>` / `<log-group>` | App log shipping (out of alarm scope). | — |
 
 ## Contract (floor, not ceiling)
@@ -27,11 +27,16 @@ Consumed by `modules/cloudwatch/metrics-alarm/asg` (fleet mode),
   fleet Insights queries filter `WHERE AppName = '<v>'`.
 - Dimension `ProcessGroupName` on `jmx`; `InstanceId` via global
   `append_dimensions`.
-- OTel `jvm.*` metric names as listed in the template.
-- `aggregation_dimensions [["InstanceId"], ["InstanceId", "path"]]`:
-  the `[InstanceId]` rollup feeds the EC2 `memory` alarm and the JMX module's
-  heap/GC alarms; `[InstanceId, path]` feeds the EC2 `disk` alarm. Fleet
-  Insights queries read the full-dimension series and ignore rollups.
+- JVM metric names are **snake_case**, renamed at the agent from the OTel dotted
+  names (`jvm.memory.heap.used` → `jvm_memory_heap_used`). Dots are not valid in
+  PromQL metric names and require double-quoting in Metrics Insights SQL; the
+  snake_case form also matches every other CWAgent metric (`mem_used_percent`,
+  `disk_used_percent`). Renaming produces **new series** — historical data stays
+  under the old names.
+- `aggregation_dimensions [["InstanceId"], ["InstanceId", "path"]]`: the
+  `[InstanceId]` rollup feeds the EC2 `memory` alarm, `[InstanceId, path]` the
+  EC2 `disk` alarm. The JMX module no longer needs a rollup — it queries the
+  full-dimension series by `AppName`.
 - Never append `${aws:AutoScalingGroupName}` as an identity key — it churns
   on every CodeDeploy blue/green deployment (the exact problem the fleet
   alarms exist to avoid).
@@ -47,3 +52,21 @@ Consumed by `modules/cloudwatch/metrics-alarm/asg` (fleet mode),
 
 Related: `cwagent/jmx/` is the older standalone-JMX-only contract; hosts
 adopting this template satisfy it too.
+
+## Migrating a host group to the renamed metrics
+
+Order matters — getting it wrong leaves alarms silently green, which is the
+failure class the preflight checks exist to catch.
+
+1. Update the Parameter Store parameter from this template (`AppName` on every
+   plugin, snake_case `jvm_*` names) and restart the agent.
+2. Old-name series stop being written at step 1. Any alarm still referencing a
+   dotted name goes `INSUFFICIENT_DATA` until step 4 replaces it.
+3. Wait for data, then verify with
+   `scripts/check_jmx_metrics.sh --tfvars <path>`. Metrics Insights only sees
+   metrics that received data in roughly the last 3 hours — a renamed metric
+   appears in `list-metrics` immediately but returns empty values until
+   datapoints accumulate. `list-metrics --recently-active PT3H` is the
+   matching diagnostic.
+4. Apply the Terraform change (JMX entries gain `app_name` and
+   `heap_max_bytes`; ASG entries drop the heap fields).

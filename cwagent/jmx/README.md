@@ -1,5 +1,10 @@
 # CloudWatch Agent — JMX / JVM metrics
 
+> **Superseded by `cwagent/ec2-java/`.** This config appends only `InstanceId`
+> and no `AppName`, so hosts running it cannot be monitored by the JMX alarm
+> module, which is `AppName`-scoped. Migrate Java hosts to
+> `cwagent/ec2-java/`. Kept for reference and for the metric-name contract.
+
 Collects JVM metrics from a Java app exposing JMX on `localhost:9999` and publishes
 them to CloudWatch. The alarm module (`modules/cloudwatch/metrics-alarm/jmx`) and the
 JVM dashboard depend on the contract below.
@@ -8,9 +13,9 @@ JVM dashboard depend on the contract below.
 
 - **Namespace:** `CWAgent`
 - **Dimension:** `InstanceId` (added via `append_dimensions`)
-- **Metrics:** `jvm.memory.heap.used`, `jvm.memory.heap.committed`, `jvm.memory.heap.max`,
-  `jvm.gc.collections.count`, `jvm.gc.collections.elapsed`, `jvm.threads.count`,
-  `jvm.classes.loaded`
+- **Metrics:** `jvm_memory_heap_used`, `jvm_memory_heap_committed`, `jvm_memory_heap_max`,
+  `jvm_gc_collections_count`, `jvm_gc_collections_elapsed`, `jvm_threads_count`,
+  `jvm_classes_loaded` (snake_case, renamed at the agent from the OTel dotted names)
 - **Collection interval:** `metrics_collection_interval: 60` is pinned inside the `jmx`
   block — it must equal the alarm/widget period (60s). Keep the pin when merging this
   snippet into an existing agent config; a shorter inherited interval breaks the
@@ -19,7 +24,7 @@ JVM dashboard depend on the contract below.
 ## Prerequisites
 
 - `amazon-cloudwatch-agent` with JMX support installed on the host.
-- The JVM runs with a **bounded heap** (`-Xmx`). Without it `jvm.memory.heap.max` is
+- The JVM runs with a **bounded heap** (`-Xmx`). Without it `jvm_memory_heap_max` is
   reported as `-1`, which makes the heap alarm's `100*used/max` expression negative — it
   would then never fire. A bounded heap is assumed.
 - The JVM exposes JMX on `localhost:9999`. For a local-only, unauthenticated endpoint,
@@ -71,11 +76,11 @@ per-collector `name` on the GC metrics) **and** a series with **only `InstanceId
 `aggregation_dimensions: [["InstanceId"]]` rollup. The alarms and dashboard query the
 `{InstanceId}` rollup, so that series must be present:
 
-    aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm.memory.heap.used
-    aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm.gc.collections.elapsed
+    aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm_memory_heap_used
+    aws cloudwatch list-metrics --namespace CWAgent --metric-name jvm_gc_collections_elapsed
 
 **GC and the per-collector rollup.** The OpenTelemetry JMX `jvm` target emits
-`jvm.gc.collections.elapsed` / `.count` **once per garbage collector** (e.g. "G1 Young
+`jvm_gc_collections_elapsed` / `_count` **once per garbage collector** (e.g. "G1 Young
 Generation", "G1 Old Generation") — a `name` dimension. The `{InstanceId}` rollup sums
 across collectors **server-side**, so the `gc_time` alarm and the dashboard read the rollup
 with **`stat = Sum`** to get total time-in-GC (`Maximum` would return only the single
