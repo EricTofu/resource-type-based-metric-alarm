@@ -63,6 +63,58 @@ Key values:
   configurable from Terraform. Modules reading only CWAgent metrics (JMX) never
   touch `app_tag_key`.
 
+## Where the resource tag is used, and where it is not
+
+Two identity carriers are easy to conflate. They are independent and must be
+kept in sync by hand.
+
+| Alarm | Source | Filter | Requires the resource tag on |
+|---|---|---|---|
+| `asg` `in_service_capacity` | `AWS/AutoScaling` | `WHERE tag.<app_tag_key>` | **the ASG resource itself** |
+| `asg` `cpu` | `AWS/EC2` | `WHERE tag.<app_tag_key>` | **each EC2 instance** |
+| `asg` `memory`, `disk` | `CWAgent` | `WHERE AppName` (dimension) | nothing |
+| `jmx` `heap_used`, `gc_time` | `CWAgent` | `WHERE AppName` (dimension) | nothing |
+| `ec2` (all five) | `AWS/EC2` + `CWAgent` | pinned `dimensions` from a `tag:Name` lookup | nothing — `Name` only |
+
+So `app_tag_key` is consumed by exactly **two queries**, both in the ASG module,
+both against native AWS namespaces. Every CWAgent-sourced alarm — including all
+of `jmx` — ignores resource tags entirely and matches on the `AppName`
+*dimension* that the agent config appends.
+
+**Mechanism.** The `tag.<Key>` filter works only because of CloudWatch's
+account-level "resource tags on telemetry" setting, which joins AWS resource
+tags onto metrics from supported namespaces so Metrics Insights can filter on
+them. It is per account **and** per region; each env here is its own account, so
+it must be enabled in each.
+
+**The agent dimension is not the tag.** `append_dimensions` can resolve only a
+fixed set of placeholders (`${aws:InstanceId}`, `${aws:AutoScalingGroupName}`,
+`${aws:ImageId}`, `${aws:InstanceType}`) — there is no mechanism to read an
+arbitrary tag. The `AppName` dimension value is a literal string substituted into
+the Parameter Store copy of the config. Three values must therefore agree:
+
+1. the `AppName` resource tag on the ASG and its instances (ASG native queries),
+2. `"AppName": "<v>"` in the agent config (all CWAgent queries),
+3. `app_name` in the stack config (what Terraform renders into both).
+
+Drift between them fails silently in the green direction for every alarm except
+capacity, which is why the preflight scripts exercise both paths — a tag-scoped
+native query *and* a dimension-scoped CWAgent query — rather than checking
+either alone.
+
+**Tag propagation requirements.** Instances need the tag via the launch template
+(or `propagate_at_launch`); the ASG resource needs it in its own tag set. Under
+CodeDeploy blue/green a *new* ASG is created per deployment, so the capacity
+alarm's correctness depends on the tag landing on the successor ASG. Two risks
+follow, both to confirm on the work machine:
+
+- If CodeDeploy does not copy ASG tags to the replacement ASG, the capacity
+  query matches nothing and — being `missing = breaching` — pages.
+- Even when tags are copied, telemetry tag joining is not instantaneous. A gap
+  between the new ASG appearing and its tags being queryable is a window where
+  the capacity alarm sees no data. Its evaluation window is 10 × 60s, so the gap
+  must stay under ~10 minutes to avoid a spurious page.
+
 ## Module boundaries
 
 | Module | Target class | Identity | Alarms |
@@ -344,9 +396,20 @@ so they are not re-litigated:
   `DIFF(SELECT …)` is a syntax error; the SQL must be its own query entry
   referenced by ID from a separate math expression.
 
-## Blocking verify item
+## Blocking verify items
 
-**`PutMetricAlarm` must accept `DIFF()` over a multi-series query, and the
+**1. Resource-tag telemetry must cover both native namespaces.** Confirm
+`WHERE tag.<app_tag_key>` returns data for `AWS/EC2` (the `cpu` alarm) *and*
+`AWS/AutoScaling` (the `capacity` alarm) in each account/region. The second was
+already unconfirmed in the 2026-07-24 spec. Also confirm the tag survives a
+CodeDeploy blue/green ASG replacement, and measure how long tag joining lags a
+new ASG. If `AWS/AutoScaling` is not covered, `in_service_capacity` falls back
+to legacy dimension mode with a documented re-apply-after-deploy limitation; if
+`AWS/EC2` is not covered, `cpu` falls back to the agent-side `cpu_usage_idle`
+metric (`AVG < 100 - threshold`, `WHERE AppName`, `GROUP BY InstanceId`), which
+needs no config change.
+
+**2. `PutMetricAlarm` must accept `DIFF()` over a multi-series query, and the
 resulting alarm must evaluate per series.** Graphing an expression does not
 prove it can back an alarm. Before any real apply, create one alarm by hand,
 confirm it leaves `INSUFFICIENT_DATA`, and confirm `StateReason` names the
