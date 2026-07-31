@@ -79,7 +79,7 @@ Example: `project1-EC2-[web-server-1]-CPUUtilization`
 
 | Resource Type   | Metrics                                                                              |
 | --------------- | ------------------------------------------------------------------------------------ |
-| **ALB**         | HTTPCode_ELB_5XX_Count, HTTPCode_Target_5XX_Count, UnHealthyHostCount (per target group — requires `target_groups`) |
+| **ALB**         | HTTPCode_ELB_5XX_Count, HTTPCode_Target_5XX_Count, UnHealthyHostCount (per target group — requires `target_groups`), TargetResponseTime |
 | **API Gateway** | 5XXError                                                                             |
 | **EC2**         | StatusCheckFailed, StatusCheckFailed_AttachedEBS, CPUUtilization, mem_used_percent   |
 | **ASG**         | GroupInServiceCapacity                                                               |

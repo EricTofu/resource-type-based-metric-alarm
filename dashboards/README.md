@@ -14,8 +14,10 @@ Three widgets per host group:
 
 - **Heap (bytes)** — `jvm_memory_heap_used` (one line per instance) plus a single
   `jvm_memory_heap_max` line.
-- **GC time (ms/min)** — `DIFF()` of the cumulative `jvm_gc_collections_elapsed` counter
-  (GC time/min) and of `jvm_gc_collections_count` (GC cycles/min).
+- **GC time (ms/min)** — `jvm_gc_collections_elapsed` (GC time/min) and
+  `jvm_gc_collections_count` (GC cycles/min), plotted directly: the CloudWatch Agent's
+  `cumulativetodelta` processor already publishes both as a per-interval delta, so no
+  further differencing is applied.
 - **Threads & classes** — `jvm_threads_count` and `jvm_classes_loaded`.
 
 Two ways to use it:

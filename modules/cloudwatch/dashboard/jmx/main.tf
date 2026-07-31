@@ -55,10 +55,8 @@ locals {
           period = 60
           yAxis  = { left = { min = 0 } }
           metrics = [
-            [{ id = "e1", label = "GC time ms/min", expression = "DIFF(q1)" }],
-            [{ id = "q1", visible = false, expression = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
-            [{ id = "e2", label = "GC cycles/min", yAxis = "right", expression = "DIFF(q2)" }],
-            [{ id = "q2", visible = false, expression = "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
+            [{ id = "q1", label = "GC time ms/min", expression = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
+            [{ id = "q2", label = "GC cycles/min", yAxis = "right", expression = "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
           ]
         }
       },

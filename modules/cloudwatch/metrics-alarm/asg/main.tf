@@ -97,7 +97,7 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
 #  in_service_capacity["k"] — two unrelated resource addresses with no
 #  dependency edge, which Terraform is free to run concurrently. If the destroy
 #  lands second, it DELETES the alarm the create just made: state says the
-#  ERROR-severity capacity watchdog exists, CloudWatch says it does not, and the
+#  CRIT-severity capacity watchdog exists, CloudWatch says it does not, and the
 #  pager is silently disarmed until someone notices or re-applies.
 #
 #  A `moved` block cannot fix this: it is static, so it would also move entries

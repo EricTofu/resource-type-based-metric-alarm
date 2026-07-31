@@ -40,31 +40,17 @@
         "metrics": [
           [
             {
-              "expression": "DIFF(q1)",
-              "id": "e1",
-              "label": "GC time ms/min"
-            }
-          ],
-          [
-            {
               "expression": "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
               "id": "q1",
-              "visible": false
-            }
-          ],
-          [
-            {
-              "expression": "DIFF(q2)",
-              "id": "e2",
-              "label": "GC cycles/min",
-              "yAxis": "right"
+              "label": "GC time ms/min"
             }
           ],
           [
             {
               "expression": "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
               "id": "q2",
-              "visible": false
+              "label": "GC cycles/min",
+              "yAxis": "right"
             }
           ]
         ],
