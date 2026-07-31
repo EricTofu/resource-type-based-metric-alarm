@@ -789,6 +789,7 @@ EOF
 **Files:**
 - Modify: `CLAUDE.md` (Severity → SNS Routing section; JMX bullet)
 - Modify: `cwagent/ec2-java/README.md` (contract section)
+- Modify: `cwagent/jmx/README.md:29-33` (stale `DIFF()` description — added after Task 1's review)
 
 **Interfaces:**
 - Consumes: Tasks 2–5.
@@ -835,17 +836,38 @@ In `cwagent/ec2-java/README.md`, in the `## Contract (floor, not ceiling)` list,
   `metrics_collection_interval` means revisiting `default_gc_time_threshold_ms`.
 ```
 
-- [ ] **Step 5: Assert**
+- [ ] **Step 5: Fix the stale `DIFF()` description in the superseded template's README**
+
+`cwagent/jmx/README.md` lines 29-33 currently claim the `gc_time` alarm is `DIFF()` over a
+cumulative counter. That is wrong twice over after Task 2 — there is no `DIFF`, and the
+counter is not cumulative by the time it reaches CloudWatch. Replace the bullet's second
+sentence so the paragraph reads:
+
+```markdown
+- **Collection interval:** `metrics_collection_interval: 60` is pinned inside the `jmx`
+  block. Keep the pin when merging this snippet into an existing agent config: the JMX
+  module's `gc_time` alarm thresholds `jvm_gc_collections_elapsed` as **ms of GC per
+  minute**, and that metric is a delta *per collection interval* (the agent's
+  `cumulativetodelta` processor converts it before publishing). An interval other than 60
+  silently changes what the threshold means.
+```
+
+Note this file documents the **superseded** JMX-only agent template — it appends no
+`AppName`, so hosts on it are invisible to the current alarms. Fix the sentence; do not
+expand the file.
+
+- [ ] **Step 6: Assert**
 
 Run:
 ```bash
 grep -q 'metrics_collection_interval' cwagent/ec2-java/README.md && echo PASS || echo FAIL
 grep -q 'routing contract, not labels' CLAUDE.md && echo PASS || echo FAIL
 grep -q 'ORDER BY SUM() DESC' CLAUDE.md && echo PASS || echo FAIL
+grep -q 'DIFF()' cwagent/jmx/README.md && echo "FAIL (stale DIFF text remains)" || echo PASS
 ```
-Expected: `PASS` three times.
+Expected: `PASS` four times.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A
