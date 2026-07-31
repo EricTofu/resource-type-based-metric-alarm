@@ -6,7 +6,7 @@ locals {
     cpu                = "ERROR"
     jvm_memory         = "ERROR"
     old_gen_jvm_memory = "ERROR"
-    free_storage       = "WARN"
+    free_storage       = "ERROR"
   }
 }
 

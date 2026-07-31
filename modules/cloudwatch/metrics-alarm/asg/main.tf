@@ -7,7 +7,7 @@ locals {
   fleet_resources  = { for k, v in local.asg_resources : k => v if v.app_name != null }
 
   default_severities = {
-    in_service_capacity = "ERROR"
+    in_service_capacity = "CRIT"
     cpu                 = "WARN"
     memory              = "WARN"
     disk                = "WARN"

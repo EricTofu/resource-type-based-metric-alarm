@@ -17,10 +17,10 @@ locals {
 
   # Default severities per metric
   default_severities = {
-    elb_5xx              = "WARN"
-    target_5xx           = "WARN"
-    unhealthy_host       = "ERROR"
-    target_response_time = "WARN"
+    elb_5xx              = "CRIT"
+    target_5xx           = "CRIT"
+    unhealthy_host       = "CRIT"
+    target_response_time = "CRIT"
   }
 }
 
