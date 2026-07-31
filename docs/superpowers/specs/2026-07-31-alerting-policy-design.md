@@ -14,9 +14,12 @@ tiers actually *do*. The result, measured before this design:
 
 | tier | count | contents |
 |---|---|---|
-| CRIT | 3 | ec2 `status_check`, `status_check_ebs`, rds `engine_uptime` |
-| ERROR | 6 | alb `unhealthy_host`, asg capacity ×2, elasticache ×2, lambda `errors`, opensearch ×4 |
-| WARN | ~31 | every cpu / memory / disk / latency / storage / 5xx / bounce-rate alarm |
+| CRIT | 3 | ec2 `status_check`, `status_check_ebs`; rds `engine_uptime` |
+| ERROR | 10 | alb `unhealthy_host`; asg capacity ×2; cloudfront `error_5xx`; elasticache ×2; lambda `errors`; opensearch `cpu` / `jvm_memory` / `old_gen_jvm_memory` |
+| WARN | 27 | every cpu / memory / disk / latency / storage / 5xx / bounce-rate alarm, plus jmx `heap_used` |
+
+(Counts are of alarm *resources*, not severity-map keys — the asg module's `fleet_*`
+alarms reuse the legacy keys, so a key can back two alarms.)
 
 Two defects follow from that distribution:
 
@@ -103,7 +106,7 @@ Do not "fix" this WARN without checking the canary still exists.
 JVM: classes loaded, non-heap, per-collector GC detail. Host: swap, netstat, processes,
 ethtool, diskio, net — all collected by `cwagent/ec2-java/`, none alarmed.
 
-Resulting shape: **9 CRIT / 14 ERROR / 19 WARN** = 42 alarms, against 3 / 6 / 31 = 40
+Resulting shape: **9 CRIT / 14 ERROR / 19 WARN** = 42 alarms, against 3 / 10 / 27 = 40
 today. The two additions are `gc_time` (reinstated) and `target_response_time`
 (re-enabled); nothing is deleted.
 
