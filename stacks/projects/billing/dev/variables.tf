@@ -262,11 +262,12 @@ variable "jmx_resources" {
     process_group  = optional(string)
     enabled        = optional(bool, true)
     overrides = optional(object({
-      severity             = optional(string)
-      description          = optional(string)
-      heap_threshold       = optional(number)
-      gc_time_threshold_ms = optional(number)
-      disabled_alarms      = optional(set(string), [])
+      severity                = optional(string)
+      description             = optional(string)
+      heap_threshold          = optional(number)
+      heap_evaluation_periods = optional(number)
+      gc_time_threshold_ms    = optional(number)
+      disabled_alarms         = optional(set(string), [])
     }), {})
   }))
   default = []

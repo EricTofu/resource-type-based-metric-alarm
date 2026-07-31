@@ -60,8 +60,18 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
       var.default_heap_threshold
     ) * each.value.heap_max_bytes / 100
   )
-  evaluation_periods  = 3
-  datapoints_to_alarm = 3
+  # Long window on purpose: a healthy JVM touches 90% of -Xmx just before a
+  # collection, so a short window fires on the sawtooth. Only a heap that stays
+  # high for the whole window indicates a post-GC live set that does not fit —
+  # which is also what a GC spiral looks like from the heap side.
+  evaluation_periods = coalesce(
+    try(each.value.overrides.heap_evaluation_periods, null),
+    var.default_heap_evaluation_periods
+  )
+  datapoints_to_alarm = coalesce(
+    try(each.value.overrides.heap_evaluation_periods, null),
+    var.default_heap_evaluation_periods
+  )
 
   # GROUP BY InstanceId: one series per instance; each becomes an alarm
   # contributor and the alarm enters ALARM as soon as one of them breaches.

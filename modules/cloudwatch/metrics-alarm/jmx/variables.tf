@@ -17,11 +17,12 @@ variable "resources" {
     process_group  = optional(string)
     enabled        = optional(bool, true)
     overrides = optional(object({
-      severity             = optional(string)
-      description          = optional(string)
-      heap_threshold       = optional(number)
-      gc_time_threshold_ms = optional(number)
-      disabled_alarms      = optional(set(string), [])
+      severity                = optional(string)
+      description             = optional(string)
+      heap_threshold          = optional(number)
+      heap_evaluation_periods = optional(number)
+      gc_time_threshold_ms    = optional(number)
+      disabled_alarms         = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -47,6 +48,14 @@ variable "resources" {
       || coalesce(try(r.overrides.gc_time_threshold_ms, null), 0) >= 0
     ])
     error_message = "overrides.gc_time_threshold_ms must be >= 0, or omitted."
+  }
+  validation {
+    condition = alltrue([
+      for r in var.resources :
+      try(r.overrides.heap_evaluation_periods, null) == null
+      || coalesce(try(r.overrides.heap_evaluation_periods, null), 0) >= 1
+    ])
+    error_message = "overrides.heap_evaluation_periods must be >= 1, or omitted."
   }
   validation {
     condition = alltrue([
@@ -94,9 +103,15 @@ variable "sns_topic_arns" {
 }
 
 variable "default_heap_threshold" {
-  description = "Default JVM heap threshold as a percent of each entry's heap_max_bytes. Rendered into a byte threshold on jvm_memory_heap_used."
+  description = "Default JVM heap threshold as a percent of each entry's heap_max_bytes. Rendered into a byte threshold on jvm_memory_heap_used. 90 rather than 85 because the alarm now requires a long sustained window: a healthy JVM peaks near -Xmx just before a collection, so only a heap that STAYS high indicates a live set that does not fit."
   type        = number
-  default     = 85
+  default     = 90
+}
+
+variable "default_heap_evaluation_periods" {
+  description = "Consecutive 60s periods jvm_memory_heap_used must exceed the threshold before the heap alarm fires. Long by design (10 = 10 minutes): duration substitutes for the post-GC sampling CloudWatch cannot do. datapoints_to_alarm is always set equal to this."
+  type        = number
+  default     = 10
 }
 
 variable "default_gc_time_threshold_ms" {
