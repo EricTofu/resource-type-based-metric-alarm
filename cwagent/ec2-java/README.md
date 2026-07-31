@@ -24,6 +24,12 @@ Consumed by `modules/cloudwatch/metrics-alarm/asg` (fleet mode),
 they cover fleet and standalone hosts alike) and `modules/cloudwatch/dashboard/jmx`:
 
 - Namespace `CWAgent`; 60s collection interval.
+- **The 60s interval is load-bearing, not a preference.** The agent applies a
+  `cumulativetodelta` processor to the `jmx` pipeline, so `jvm_gc_collections_elapsed`
+  is published as a delta *per collection interval*. The JMX module's `gc_time` alarm
+  thresholds it as "ms of GC per minute" (6000 = 10% of wall clock). Halve the interval
+  and every GC threshold silently halves in meaning, with no error anywhere. Changing
+  `metrics_collection_interval` means revisiting `default_gc_time_threshold_ms`.
 - Dimension `AppName` (static, plugin-level) on **every** metrics plugin —
   fleet Insights queries filter `WHERE AppName = '<v>'`.
 - Dimension `ProcessGroupName` on `jmx`; `InstanceId` via global

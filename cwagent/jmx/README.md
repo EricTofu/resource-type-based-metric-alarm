@@ -27,10 +27,11 @@ names themselves (which `cwagent/ec2-java/` shares).
   `jvm_gc_collections_count`, `jvm_gc_collections_elapsed`, `jvm_threads_count`,
   `jvm_classes_loaded` (snake_case, renamed at the agent from the OTel dotted names)
 - **Collection interval:** `metrics_collection_interval: 60` is pinned inside the `jmx`
-  block. Keep the pin when merging this snippet into an existing agent config: the
-  JMX alarms' `gc_time` expression is `DIFF()` over a cumulative counter at
-  `period = 60`, i.e. ms of GC per minute, and a collection interval below the
-  period puts more than one datapoint in a period and distorts that delta.
+  block. Keep the pin when merging this snippet into an existing agent config: the JMX
+  module's `gc_time` alarm thresholds `jvm_gc_collections_elapsed` as **ms of GC per
+  minute**, and that metric is a delta *per collection interval* (the agent's
+  `cumulativetodelta` processor converts it before publishing). An interval other than 60
+  silently changes what the threshold means.
 
 ## Prerequisites
 
@@ -107,9 +108,12 @@ renames each to `jvm_gc_collections_elapsed` / `_count` (the `rename` field in t
 contract above) before publishing. Total time-in-GC therefore requires summing across
 collectors. **History:** an earlier design of the `gc_time` alarm did that server-side by
 reading the `{InstanceId}` rollup with `stat = "Sum"`. The current alarm has **no `stat`**
-at all — it is a Metrics Insights query, `SELECT SUM(jvm_gc_collections_elapsed) … GROUP BY
-InstanceId` wrapped in `DIFF()`, where the `SUM` is the SQL aggregate doing the same
-cross-collector totalling on the full-dimension series. The rollup is not involved.
+at all — it is a plain Metrics Insights query, `SELECT SUM(jvm_gc_collections_elapsed) …
+GROUP BY InstanceId ORDER BY SUM() DESC`, no metric math wrapper: the `SUM` is the SQL
+aggregate doing the same cross-collector totalling on the full-dimension series, and it
+is the agent's `cumulativetodelta` processor — not any query-side function — that turns
+the counter into a per-interval delta before it reaches CloudWatch. The rollup is not
+involved.
 Either way JMX must be collected at 60s (= the alarm period) so there is one datapoint
 per period; the shipped config pins `metrics_collection_interval: 60` inside the `jmx`
 block for that reason, and the pin must survive a merge into an existing agent config.
