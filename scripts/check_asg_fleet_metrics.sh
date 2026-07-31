@@ -348,7 +348,7 @@ while IFS=$'\t' read -r NAME APP CHECK_CPU CHECK_MEMORY CHECK_DISK; do
 
   if [[ "$CHECK_CPU" == "1" ]]; then
     check_query "$NAME" "CPUUtilization (EC2 tag telemetry)" \
-      "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${APP_TAG_KEY} = '$APP' GROUP BY InstanceId" \
+      "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${APP_TAG_KEY} = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
       "Enable CloudWatch 'resource tags on telemetry' for EC2 instances; if unavailable, the spec's fallback is the agent-side cpu_usage_idle metric." \
       300 "AWS/EC2" "CPUUtilization"
   fi
@@ -360,14 +360,14 @@ while IFS=$'\t' read -r NAME APP CHECK_CPU CHECK_MEMORY CHECK_DISK; do
   # the preflight fail on a config that deliberately opts out of that alarm.
   if [[ "$CHECK_MEMORY" == "1" ]]; then
     check_query "$NAME" "mem_used_percent" \
-      "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE AppName = '$APP' GROUP BY InstanceId" \
+      "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE AppName = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
       "Deploy the cwagent/ec2-java/ config (AppName dimension on the mem plugin)." \
       300 "CWAgent" "mem_used_percent"
   fi
 
   if [[ "$CHECK_DISK" == "1" ]]; then
     check_query "$NAME" "disk_used_percent" \
-      "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE AppName = '$APP' AND path = '/' GROUP BY InstanceId" \
+      "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE AppName = '$APP' AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC" \
       "Deploy the cwagent/ec2-java/ config (AppName dimension on the disk plugin, resources ['/'])." \
       300 "CWAgent" "disk_used_percent"
   fi

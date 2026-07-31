@@ -412,13 +412,13 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
 
   if [[ "$CHECK_HEAP" == "1" ]]; then
     check_query "$NAME" "jvm_memory_heap_used" \
-      "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId" \
+      "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId ORDER BY AVG() DESC" \
       "$CWAGENT_HINT" 60 "CWAgent" "jvm_memory_heap_used"
   fi
 
   if [[ "$CHECK_GC" == "1" ]]; then
     check_query "$NAME" "jvm_gc_collections_elapsed" \
-      "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId" \
+      "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId ORDER BY SUM() DESC" \
       "$CWAGENT_HINT" 60 "CWAgent" "jvm_gc_collections_elapsed"
   fi
 
