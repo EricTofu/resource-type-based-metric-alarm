@@ -69,25 +69,30 @@ classification must be re-derived.
 Every entry is "users are being hurt right now" or "the thing is gone". No JVM metric is
 in this tier.
 
-### ERROR — chat (13)
+### ERROR — chat (14)
 
 - jmx `gc_time`, `heap_used` — candidate leading indicators, see "JVM signals"
 - rds `free_storage`, `freeable_memory`, `write_latency`
 - elasticache `cpu`, `memory` — unchanged
 - lambda `errors` — unchanged
 - s3 `replication_failed` — data-durability risk
+- cloudfront `error_5xx` — unchanged (already ERROR)
 - opensearch `cpu`, `jvm_memory`, `old_gen_jvm_memory` — unchanged; plus `free_storage`,
   promoted from WARN so the four move together. These are AWS-recommended defaults on a
   cluster that is not heavily loaded in production; kept at ERROR deliberately rather than
   for consistency with our own JVM signals, which are held at ERROR for a different reason
   (unvalidated lead time).
 
-### WARN — digest (20)
+### WARN — digest (19)
 
 ec2 and asg-fleet `cpu` / `memory` / `disk`; efs `throughput_util`; rds `cpu` /
-`database_connections` / `acu_utilization` / `serverless_capacity` / `volume_bytes_used`;
-cloudfront `origin_latency` / `error_4xx`; ses `bounce_rate`; lambda `duration` /
-`throttles` / `concurrency`; apigateway `error_5xx`; s3 `error_5xx`.
+`database_connections` / `read_latency` / `acu_utilization` / `serverless_capacity`;
+cloudfront `origin_latency`; ses `bounce_rate`; lambda `duration` / `throttles` /
+`concurrency`; apigateway `error_5xx`; s3 `error_5xx`.
+
+cloudfront `error_5xx` stays at **ERROR**, its current value — untouched because it was
+never discussed. rds `volume_bytes_used` and cloudfront `error_4xx` / `cache_hit_rate` are
+commented out in their modules and are not part of this classification.
 
 `apigateway error_5xx` stays WARN **because the customer-facing path is covered by a
 synthetic canary alarm that fires on any non-200**. That canary lives outside this repo.
@@ -98,7 +103,7 @@ Do not "fix" this WARN without checking the canary still exists.
 JVM: classes loaded, non-heap, per-collector GC detail. Host: swap, netstat, processes,
 ethtool, diskio, net — all collected by `cwagent/ec2-java/`, none alarmed.
 
-Resulting shape: **9 CRIT / 13 ERROR / 20 WARN** = 42 alarms, against 3 / 6 / 31 = 40
+Resulting shape: **9 CRIT / 14 ERROR / 19 WARN** = 42 alarms, against 3 / 6 / 31 = 40
 today. The two additions are `gc_time` (reinstated) and `target_response_time`
 (re-enabled); nothing is deleted.
 
