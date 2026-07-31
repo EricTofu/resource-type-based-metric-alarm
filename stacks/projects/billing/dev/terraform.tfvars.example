@@ -74,11 +74,10 @@ asg_resources = [
   },
 ]
 
-# valid jmx ids: heap_used (gc_time was removed 2026-07-31 — PutMetricAlarm cannot
-# back an alarm with DIFF over a GROUP BY query). heap_max_bytes = JVM -Xmx in
-# bytes, required unless heap_used is disabled (the alarm is a byte threshold);
-# scripts/resolve_heap_max.sh emits it from live telemetry. process_group scopes
-# the queries when a host runs more than one JVM. `name` is a label only.
+# valid jmx ids: heap_used, gc_time. heap_max_bytes = JVM -Xmx in bytes, required
+# unless heap_used is disabled (the alarm is a byte threshold); scripts/resolve_heap_max.sh
+# emits it from live telemetry. process_group scopes the queries when a host runs more
+# than one JVM. `name` is a label only.
 jmx_resources = [
   {
     name           = "billing-chat-fleet"
@@ -86,7 +85,7 @@ jmx_resources = [
     heap_max_bytes = 12884901888 # -Xmx12G
     process_group  = "chat-server-tomcat"
     overrides = {
-      heap_threshold = 90
+      gc_time_threshold_ms = 12000 # 20% of wall clock, for a GC-heavy service
     }
   },
   # standalone Java hosts may share one app_name; the entry then covers all of

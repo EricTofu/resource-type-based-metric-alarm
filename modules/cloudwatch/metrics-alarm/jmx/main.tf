@@ -29,7 +29,8 @@ locals {
   }
 
   default_severities = {
-    heap_used = "WARN"
+    heap_used = "ERROR"
+    gc_time   = "ERROR"
   }
 }
 
@@ -101,28 +102,75 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
 }
 
 #------------------------------------------------------------------------------
-# GC time — REMOVED (2026-07-31).
+# GC time (ms per minute) — a plain gauge query, NOT metric math.
 #
-# The alarm was DIFF(q1) over `SELECT SUM(jvm_gc_collections_elapsed) … GROUP BY
-# InstanceId`. PutMetricAlarm rejects it:
+# The CloudWatch agent applies a `cumulativetodelta/jmx` processor before
+# publishing (see the translated pipeline at
+# /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.yaml), so
+# jvm_gc_collections_elapsed reaches CloudWatch already as milliseconds of GC
+# per 60s collection interval — verified over a 3h span: it rises and returns
+# to 0 instead of climbing. `initial_value: 2` drops the first point.
 #
-#   ValidationError: Metrics expression that return multi time series are only
-#   allowed for MetricsInsights expression with an ORDER BY clause
+# The previous DIFF(q1) form was wrong twice over: PutMetricAlarm rejects metric
+# math wrapping a multi-series query, AND differencing an already-differenced
+# series measures the CHANGE in GC time (acceleration), not GC time. The
+# "JVM restart resets the counter -> negative DIFF -> fails safe" reasoning
+# guarded against a reset that never reaches CloudWatch.
 #
-# Any expression backing an alarm must return a single time series; the sole
-# exception is a Metrics Insights expression carrying ORDER BY. DIFF(q1) is
-# metric math, not an Insights expression, so no ORDER BY inside q1 rescues it —
-# and RATE() fails identically. This resolves the 2026-07-30 spec's blocking
-# verify item 2 in the negative.
+# SUM totals time-in-GC across the per-collector `name` series within each
+# instance. The threshold is ms of GC per minute: 6000 = 10% of wall clock, the
+# standard GC-overhead heuristic.
 #
-# Dropped rather than reshaped, per that spec's fallback 3: heap exhaustion and
-# GC thrash almost always arrive together, so `heap_used` above still catches
-# the incident. The gap left behind is a JVM that thrashes GC without filling
-# heap. Two ways back if that gap bites:
-#   1. agent-side delta temporality on jvm_gc_collections_elapsed — then the
-#      alarm is a plain Insights query with ORDER BY and no math at all;
-#   2. drop GROUP BY so DIFF returns one series — legal, but it sums GC time
-#      across the group, so one sick JVM is diluted by healthy ones.
-# The GC widgets in modules/cloudwatch/dashboard/jmx are unaffected: dashboards
-# use GetMetricData, which has no single-series constraint.
+# CAUTION: "ms per interval" equals "ms per minute" only while the agent's
+# metrics_collection_interval is 60. Halve the interval and every threshold here
+# silently halves in meaning.
 #------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "gc_time" {
+  for_each = {
+    for k, v in local.jmx_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "gc_time")
+  }
+
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-GcTimeMsPerMinute"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.gc_time)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${local.name_prefix}-[${each.value.name}]-GcTimeMsPerMinute is in ALARM state"
+  )}"
+
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.gc_time_threshold_ms, null),
+    var.default_gc_time_threshold_ms
+  )
+  evaluation_periods  = 5
+  datapoints_to_alarm = 5
+
+  # Five consecutive minutes, so a single stop-the-world burst does not fire it.
+  # ORDER BY is required for a multi-series alarm — see heap_used above.
+  metric_query {
+    id          = "q1"
+    return_data = true
+    period      = 60
+    expression  = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId ORDER BY SUM() DESC"
+  }
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(try(each.value.overrides.severity, null), local.default_severities.gc_time)]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(try(each.value.overrides.severity, null), local.default_severities.gc_time)]
+  ] : []
+
+  treat_missing_data = "notBreaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "JMX"
+      ResourceName = each.value.name
+    }
+  )
+}
