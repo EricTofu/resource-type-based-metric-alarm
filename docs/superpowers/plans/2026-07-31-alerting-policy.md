@@ -971,7 +971,34 @@ EOF
 
 ## Deferred to the work machine (not tasks)
 
+### Paging risks raised by the final review — rule on these before the first prod apply
+
+Three CRIT alarms have thresholds that were correct at their old severity and may not be at
+CRIT, where they wake a human. None is a code defect; each is an operational call about a
+specific environment, so they were parked rather than "fixed" by guessing.
+
+1. **asg `in_service_capacity` (now CRIT, `treat_missing_data = "breaching"`, threshold =
+   the static `desired_capacity` from config).** A dev fleet scaled to zero overnight, or a
+   target-tracking policy scaling in below the committed `desired_capacity`, pages at 03:00
+   — `billing/dev` most of all. This is the likeliest spurious pager in the set. Options:
+   set `overrides.capacity_threshold` below each fleet's scale-in floor, or keep the alarm
+   at ERROR in non-prod.
+2. **alb `target_5xx` (now CRIT, absolute threshold, default 5 Sum/min over 5 min).** On a
+   high-traffic ALB, one chronically failing endpoint at 6 errors/min out of 100k requests
+   pages nightly at a 0.006% error rate. Consider a traffic-scaled default or an error-rate
+   form. `unhealthy_host` (default 1, `Minimum`, 5 min) has the same shape: a blue/green
+   registering slow-starting Tomcat targets can hold 2+ targets unhealthy past five minutes
+   and page mid-deploy.
+3. **alb `target_response_time` (now CRIT, p90 > 20s sustained 5 min).** The threshold was
+   carried over unchanged from when the alarm was disabled, but its purpose changed: it is
+   now the leading indicator meant to fire *before* 5xx appear. A p90 of 20s arrives long
+   after users have left. It will not false-fire; it will also not lead. Re-derive from
+   observed p90, or record why 20 stands.
+
+### Everything else
+
 - **Apply.** These changes alter live alarm routing. The capacity watchdogs and `elb_5xx` are the promotions most likely to surprise: confirm the watchdog stays quiet through a CodeDeploy blue/green before letting it page.
+- **The `PutMetricAlarm` probe is non-negotiable before apply.** This entire change set exists because `terraform validate` and `get-metric-data` both accept a query the API rejects. Create one throwaway alarm by hand for `gc_time`, and one for any `ORDER BY`-carrying `GROUP BY` alarm, with no alarm actions; confirm acceptance; delete them. Task 2's Step 8 has the exact commands.
 - **The reproduction experiment** (spec: "Promotion criterion"). Until it runs, `gc_time` and `heap_used` stay at ERROR.
 - **The PromQL question** (spec: "Open questions"). Query Studio → PromQL tab → `{"jvm_threads_count"}`, with an AWS-vended metric as positive control.
 - **`thread_count`** is deliberately not implemented. Revive only with measured lead time, and remember a bounded pool plateaus rather than climbing.
