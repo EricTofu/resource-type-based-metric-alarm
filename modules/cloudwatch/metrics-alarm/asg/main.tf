@@ -191,12 +191,18 @@ resource "aws_cloudwatch_metric_alarm" "fleet_cpu" {
   evaluation_periods  = 3
   datapoints_to_alarm = 3
 
-  # GROUP BY InstanceId: one series per instance; ALARM when ANY series breaches.
+  # GROUP BY InstanceId: one series per instance; each becomes an alarm
+  # contributor and the alarm enters ALARM as soon as one of them breaches.
+  #
+  # ORDER BY is REQUIRED: PutMetricAlarm rejects any expression returning
+  # multiple time series unless it is a Metrics Insights expression carrying an
+  # ORDER BY clause. It also selects which 500 series are evaluated in a group
+  # larger than that — DESC keeps the busiest instances.
   metric_query {
     id          = "q1"
     return_data = true
     period      = 300
-    expression  = "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${var.app_tag_key} = '${each.value.app_name}' GROUP BY InstanceId"
+    expression  = "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${var.app_tag_key} = '${each.value.app_name}' GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -251,7 +257,8 @@ resource "aws_cloudwatch_metric_alarm" "fleet_memory" {
     id          = "q1"
     return_data = true
     period      = 300
-    expression  = "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}' GROUP BY InstanceId"
+    # ORDER BY required for a multi-series alarm — see the cpu alarm above.
+    expression = "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}' GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -304,7 +311,8 @@ resource "aws_cloudwatch_metric_alarm" "fleet_disk" {
     id          = "q1"
     return_data = true
     period      = 300
-    expression  = "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}' AND path = '/' GROUP BY InstanceId"
+    # ORDER BY required for a multi-series alarm — see the cpu alarm above.
+    expression = "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}' AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [

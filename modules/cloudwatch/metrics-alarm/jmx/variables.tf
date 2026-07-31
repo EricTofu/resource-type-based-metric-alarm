@@ -17,11 +17,10 @@ variable "resources" {
     process_group  = optional(string)
     enabled        = optional(bool, true)
     overrides = optional(object({
-      severity             = optional(string)
-      description          = optional(string)
-      heap_threshold       = optional(number)
-      gc_time_threshold_ms = optional(number)
-      disabled_alarms      = optional(set(string), [])
+      severity        = optional(string)
+      description     = optional(string)
+      heap_threshold  = optional(number)
+      disabled_alarms = optional(set(string), [])
     }), {})
   }))
   validation {
@@ -40,21 +39,17 @@ variable "resources" {
     ])
     error_message = "overrides.heap_threshold must be between 0 and 100 inclusive, or omitted. It is a percentage of heap_max_bytes."
   }
-  validation {
-    condition = alltrue([
-      for r in var.resources :
-      try(r.overrides.gc_time_threshold_ms, null) == null
-      || coalesce(try(r.overrides.gc_time_threshold_ms, null), 0) >= 0
-    ])
-    error_message = "overrides.gc_time_threshold_ms must be >= 0, or omitted."
-  }
+  # gc_time was removed 2026-07-31 (PutMetricAlarm rejects DIFF over a
+  # multi-series query — see main.tf). It is deliberately NOT accepted here:
+  # a leftover `disabled_alarms: [gc_time]` fails the plan with this message
+  # rather than being silently tolerated for an alarm that no longer exists.
   validation {
     condition = alltrue([
       for r in var.resources : alltrue([
-        for m in try(r.overrides.disabled_alarms, []) : contains(["heap_used", "gc_time"], m)
+        for m in try(r.overrides.disabled_alarms, []) : contains(["heap_used"], m)
       ])
     ])
-    error_message = "overrides.disabled_alarms entries must be a subset of: heap_used, gc_time"
+    error_message = "overrides.disabled_alarms entries must be a subset of: heap_used. (gc_time was removed — PutMetricAlarm cannot back an alarm with DIFF over a GROUP BY query; drop the entry.)"
   }
   # try(...,"") makes null fail: app_name is the identity and cannot be inferred.
   validation {
@@ -97,12 +92,6 @@ variable "default_heap_threshold" {
   description = "Default JVM heap threshold as a percent of each entry's heap_max_bytes. Rendered into a byte threshold on jvm_memory_heap_used."
   type        = number
   default     = 85
-}
-
-variable "default_gc_time_threshold_ms" {
-  description = "Default threshold (milliseconds of GC per minute) for DIFF of jvm_gc_collections_elapsed"
-  type        = number
-  default     = 6000
 }
 
 variable "common_tags" {

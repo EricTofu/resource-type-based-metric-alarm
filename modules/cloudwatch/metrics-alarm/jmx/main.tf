@@ -30,7 +30,6 @@ locals {
 
   default_severities = {
     heap_used = "WARN"
-    gc_time   = "WARN"
   }
 }
 
@@ -63,14 +62,22 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
   evaluation_periods  = 3
   datapoints_to_alarm = 3
 
-  # GROUP BY InstanceId: one series per instance; ALARM when ANY series breaches.
+  # GROUP BY InstanceId: one series per instance; each becomes an alarm
+  # contributor and the alarm enters ALARM as soon as one of them breaches.
   # Plain FROM "CWAgent" (not SCHEMA) tolerates the extra dimensions the JMX
   # receiver adds (per-collector `name`, ProcessGroupName).
+  #
+  # ORDER BY is REQUIRED, not decorative: PutMetricAlarm rejects any expression
+  # returning multiple time series ("Metrics expression that return multi time
+  # series are only allowed for MetricsInsights expression with an ORDER BY
+  # clause") — a GROUP BY query without it fails at apply. It also picks which
+  # 500 series are evaluated when the group is larger than that; DESC keeps the
+  # highest heap users, which are the ones this alarm is looking for.
   metric_query {
     id          = "q1"
     return_data = true
     period      = 60
-    expression  = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId"
+    expression  = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -94,72 +101,28 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
 }
 
 #------------------------------------------------------------------------------
-# GC time (ms per minute) — DIFF of the cumulative jvm_gc_collections_elapsed
-# counter. DIFF over a multi-series GROUP BY result returns one series per
-# instance (verified); the SQL must be its own query referenced by id, because
-# metric math cannot be nested inside a Metrics Insights query.
+# GC time — REMOVED (2026-07-31).
 #
-# SELECT SUM totals time-in-GC across the per-collector (`name` dimension)
-# series within each instance — the receiver emits one series per garbage
-# collector. Correct while JMX collects at 60s = this period (one datapoint per
-# period); if the collection interval drops below 60s, revisit (a summed
-# cumulative counter would over-count).
+# The alarm was DIFF(q1) over `SELECT SUM(jvm_gc_collections_elapsed) … GROUP BY
+# InstanceId`. PutMetricAlarm rejects it:
 #
-# A JVM restart resets the counter -> negative DIFF -> never breaches (alarm is
-# '>'). Fails safe: misses, never false-fires. The first datapoint of a series
-# has no predecessor and produces no value.
+#   ValidationError: Metrics expression that return multi time series are only
+#   allowed for MetricsInsights expression with an ORDER BY clause
+#
+# Any expression backing an alarm must return a single time series; the sole
+# exception is a Metrics Insights expression carrying ORDER BY. DIFF(q1) is
+# metric math, not an Insights expression, so no ORDER BY inside q1 rescues it —
+# and RATE() fails identically. This resolves the 2026-07-30 spec's blocking
+# verify item 2 in the negative.
+#
+# Dropped rather than reshaped, per that spec's fallback 3: heap exhaustion and
+# GC thrash almost always arrive together, so `heap_used` above still catches
+# the incident. The gap left behind is a JVM that thrashes GC without filling
+# heap. Two ways back if that gap bites:
+#   1. agent-side delta temporality on jvm_gc_collections_elapsed — then the
+#      alarm is a plain Insights query with ORDER BY and no math at all;
+#   2. drop GROUP BY so DIFF returns one series — legal, but it sums GC time
+#      across the group, so one sick JVM is diluted by healthy ones.
+# The GC widgets in modules/cloudwatch/dashboard/jmx are unaffected: dashboards
+# use GetMetricData, which has no single-series constraint.
 #------------------------------------------------------------------------------
-
-resource "aws_cloudwatch_metric_alarm" "gc_time" {
-  for_each = {
-    for k, v in local.jmx_resources : k => v
-    if !contains(try(v.overrides.disabled_alarms, []), "gc_time")
-  }
-
-  alarm_name = "${local.name_prefix}-[${each.value.name}]-GcTimeMsPerMinute"
-  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.gc_time)}]-${coalesce(
-    try(each.value.overrides.description, null),
-    "${local.name_prefix}-[${each.value.name}]-GcTimeMsPerMinute is in ALARM state"
-  )}"
-
-  comparison_operator = "GreaterThanThreshold"
-  threshold = coalesce(
-    try(each.value.overrides.gc_time_threshold_ms, null),
-    var.default_gc_time_threshold_ms
-  )
-  evaluation_periods  = 3
-  datapoints_to_alarm = 3
-
-  metric_query {
-    id          = "e1"
-    expression  = "DIFF(q1)"
-    label       = "GcTimeMsPerMinute"
-    return_data = true
-  }
-
-  metric_query {
-    id          = "q1"
-    return_data = false
-    period      = 60
-    expression  = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId"
-  }
-
-  alarm_actions = each.value.enabled ? [
-    var.sns_topic_arns[coalesce(try(each.value.overrides.severity, null), local.default_severities.gc_time)]
-  ] : []
-
-  ok_actions = each.value.enabled ? [
-    var.sns_topic_arns[coalesce(try(each.value.overrides.severity, null), local.default_severities.gc_time)]
-  ] : []
-
-  treat_missing_data = "notBreaching"
-
-  tags = merge(
-    var.common_tags,
-    {
-      Project      = var.project
-      ResourceType = "JMX"
-      ResourceName = each.value.name
-    }
-  )
-}

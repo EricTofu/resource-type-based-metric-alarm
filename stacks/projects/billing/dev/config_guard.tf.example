@@ -1,0 +1,89 @@
+#------------------------------------------------------------------------------
+# config.yaml wiring guard — copy to config_guard.tf on a YAML-wired leaf.
+#
+# Kept as .tf.example because THIS repo's leaves are not YAML-wired: main.tf
+# still passes `var.<type>_resources`, so there is no `local.res` here and a
+# real .tf would fail `terraform validate`. On the work leaf (which reads
+# config.yaml via yamldecode — see docs/superpowers/plans/2026-06-09-tfvars-to-
+# yaml-wiring.md) drop the .example suffix, or paste the two blocks into
+# config.tf next to the `local.res` definition.
+#
+# WHAT IT CATCHES
+#
+# A `resources:` key that no module block consumes. Terraform has nothing to say
+# about it: `try(local.res.jmx, [])` in a module block that was never added
+# simply does not exist, so the key is read by nobody and the plan is clean.
+# The alarms are never created, and — worse — the library module's `validation`
+# blocks never run, so a typo'd app_name or a missing heap_max_bytes is not
+# reported either. Nothing is created, nothing is wrong, nothing is said.
+#
+# This is exactly how `jmx:` sat inert on the work leaf (2026-07-31): the leaf
+# was YAML-wired ~2026-06-10, and every type wired into main.tf after that date
+# (efs 2026-06-24, jmx 2026-07-30) arrived reading a `var.*` the YAML never
+# fills. The `count = length(...) > 0 ? 1 : 0` guard on each module block then
+# reads the `[]` default and drops the module from the graph entirely.
+#
+# MAINTENANCE
+#
+# `wired_resource_types` is a hand-maintained mirror of the module blocks in
+# main.tf. Terraform cannot enumerate its own module blocks, so the list cannot
+# be derived — adding a type to main.tf means adding its key here in the same
+# commit. A type present in main.tf but missing from this list is the one case
+# this guard cannot see: it produces a false alarm (a working key reported as
+# unconsumed), which is loud and gets fixed, not a silent hole.
+#------------------------------------------------------------------------------
+
+locals {
+  # Every `resources:` key that some module block in main.tf actually reads.
+  # Keep in sync with main.tf; see step 4 of "Adding a New Resource Type" in
+  # CLAUDE.md.
+  wired_resource_types = [
+    "alb",
+    "apigateway",
+    "asg",
+    "cloudfront",
+    "ec2",
+    "efs",
+    "elasticache",
+    "jmx",
+    "lambda",
+    "opensearch",
+    "rds",
+    "s3",
+    "ses",
+  ]
+
+  # keys() on the decoded YAML map, minus the types main.tf consumes. Empty is
+  # the healthy state. `local.res` is defined in config.tf as
+  # try(local.cfg.resources, {}), so a leaf with no resources: block yields [].
+  unconsumed_resource_types = sort(setsubtract(keys(local.res), local.wired_resource_types))
+}
+
+# A `check` block reports at the END of a plan and does NOT fail it — the point
+# is to break the silence, not to block an apply. If you would rather this be a
+# hard error (this failure mode costs you the alarms you thought you deployed),
+# delete the check and move the same condition into an output precondition:
+#
+#   output "config_yaml_guard" {
+#     value      = local.unconsumed_resource_types
+#     precondition {
+#       condition     = length(local.unconsumed_resource_types) == 0
+#       error_message = "..."
+#     }
+#   }
+#
+# Output preconditions are evaluated at plan time and fail the run. Do not keep
+# both: they assert the same thing and would report it twice.
+check "config_yaml_keys_are_wired" {
+  assert {
+    condition = length(local.unconsumed_resource_types) == 0
+    error_message = join("", [
+      "config.yaml declares resources: key(s) that no module block in main.tf reads: ",
+      join(", ", local.unconsumed_resource_types),
+      ". Nothing is being created for them and their library-module validations are NOT running. ",
+      "Either add the module block (count/resources = try(local.res.<key>, []); see step 4 of ",
+      "\"Adding a New Resource Type\" in CLAUDE.md), or delete the key from config.yaml. ",
+      "If the block does exist, add its key to local.wired_resource_types in this file.",
+    ])
+  }
+}

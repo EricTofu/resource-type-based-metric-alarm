@@ -429,6 +429,17 @@ to legacy dimension mode with a documented re-apply-after-deploy limitation; if
 metric (`AVG < 100 - threshold`, `WHERE AppName`, `GROUP BY InstanceId`), which
 needs no config change.
 
+> **RESOLVED 2026-07-31 — NEGATIVE.** A real apply returned `ValidationError:
+> Metrics expression that return multi time series are only allowed for
+> MetricsInsights expression with an ORDER BY clause`. `PutMetricAlarm` requires
+> every backing expression to return a single time series; the sole exception is
+> a Metrics Insights expression carrying `ORDER BY`, which `DIFF(q1)` is not
+> (and `RATE()` would not be either, retiring fallback 2 as well). `gc_time` was
+> removed per fallback 3. The surviving `GROUP BY` alarms — JMX `heap_used`, ASG
+> `cpu`/`memory`/`disk` — gained `ORDER BY AVG() DESC`, which was missing and
+> would have failed the same way. Per-series contributor semantics do hold once
+> `ORDER BY` is present.
+
 **2. `PutMetricAlarm` must accept `DIFF()` over a multi-series query, and the
 resulting alarm must evaluate per series.** Graphing an expression does not
 prove it can back an alarm. Before any real apply, create one alarm by hand,
