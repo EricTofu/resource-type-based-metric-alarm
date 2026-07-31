@@ -106,8 +106,21 @@ PG_FILTER=""
 
 QUERY="SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId"
 
-START=$(date -u -d "$HOURS hours ago" '+%Y-%m-%dT%H:%M:%SZ')
-END=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+# Timestamps come from python, not date(1): `date -u -d '1 hour ago'` is a GNU
+# extension and BSD date (macOS) rejects -d outright ("illegal option -- d"),
+# while its own -v syntax is equally non-portable. python3 is already a hard
+# dependency here, so this is one implementation on every platform.
+read -r START END <<EOF
+$(python3 - "$HOURS" <<'PY'
+import datetime, sys
+
+FMT = "%Y-%m-%dT%H:%M:%SZ"
+end = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+start = end - datetime.timedelta(hours=int(sys.argv[1]))
+print(start.strftime(FMT), end.strftime(FMT))
+PY
+)
+EOF
 
 echo "Profile: $PROFILE" >&2
 echo "Region:  $REGION" >&2
