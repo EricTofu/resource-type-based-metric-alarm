@@ -1,6 +1,20 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) working in this repository.
+
+## How to read this file
+
+This file records **decisions, contracts and footguns** — what the code cannot
+state about itself. It holds no thresholds, defaults, periods or query text;
+those live in the modules, and a second copy here would desync. **A threshold
+number in this file is a bug — delete it and point at the module.**
+
+| Question | Authority |
+| --- | --- |
+| Which metrics exist, thresholds, defaults, query text | the module's `main.tf` / `variables.tf` |
+| Which resources are monitored | the stack's `terraform.tfvars` / `config.yaml` |
+| Why a design is the way it is | this file, then `docs/superpowers/specs/` |
+| What it used to look like | `docs/history/`, `git log` |
 
 ## Commands
 
@@ -9,101 +23,388 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 terraform init -backend-config=backend.hcl
 terraform plan
 terraform apply
-terraform validate
-terraform fmt -recursive   # run from repo root to format everything
 
 # Library module validation (no backend):
 cd modules/cloudwatch/metrics-alarm/<type>
 terraform init -backend=false && terraform validate
+
+terraform fmt -recursive   # from repo root
 ```
 
 ## Architecture
 
-This project creates CloudWatch metric alarms for 13 AWS resource types using a modular, DRY pattern split across three layers:
+CloudWatch metric alarms for 13 AWS resource types, in three layers:
 
-1. **Library modules** (`modules/cloudwatch/metrics-alarm/<type>/`) — reusable alarm definitions, no state
-2. **Platform stacks** (`stacks/platform/<env>/`) — SNS topics per account, state in Ops bucket
-3. **Project stacks** (`stacks/projects/<project>/<env>/`) — call library modules, read SNS ARNs and the foundation `accounts` map from platform via `terraform_remote_state`
+1. **Library modules** (`modules/cloudwatch/metrics-alarm/<type>/`) — alarm
+   definitions, stateless.
+2. **Platform stacks** (`stacks/platform/<env>/`) — SNS topics per account,
+   state in the Ops bucket.
+3. **Project stacks** (`stacks/projects/<project>/<env>/`) — call the library
+   modules; read SNS ARNs and the foundation `accounts` map from platform via
+   `terraform_remote_state`.
 
-### Data Flow
+There is no root Terraform configuration. Every `terraform` command runs inside
+a stack directory — the legacy monolithic root was removed at M4.
 
-`stacks/projects/<project>/<env>/terraform.tfvars` → `main.tf` calls library modules directly with `count = length(var.<type>_resources) > 0 ? 1 : 0` → SNS ARNs come from `data.terraform_remote_state.platform.outputs.sns_topic_arns`. There is no root Terraform configuration — every `terraform` command runs inside a stack directory (the legacy monolithic root was removed at M4).
+### Two input forms
 
-`config.yaml` is an alternative input for the same leaves — `yamldecode` into `local.cfg`/`local.res`, module blocks reading `try(local.res.<type>, [])` — used where an org rule forbids `*.tfvars` in git. The leaves **in this repo** are not wired that way; `config.yaml.example` and `config_guard.tf.example` are templates for leaves that are. Both forms gate each module on a `count` over a list that defaults to empty, so an input the leaf does not read produces no alarms and no error (see step 6 of "Adding a New Resource Type").
+A leaf reads deploy intent from either `terraform.tfvars`
+(`var.<type>_resources`) or a committed `config.yaml` (`yamldecode` into
+`local.cfg` / `local.res`) — the latter where an org rule forbids `*.tfvars` in
+git. Leaves **in this repo** use tfvars; `config.yaml.example` and
+`config_guard.tf.example` under `stacks/projects/billing/dev/` are templates
+for leaves that don't.
 
-### Module Pattern
+Both gate each module on a `count` over a list defaulting to empty, so both
+share the repo's most dangerous silent failure: **an input no module block
+reads produces no alarms and no error.** See "Adding a new resource type",
+step 6.
 
-Every library module follows the same structure:
-- `variables.tf`: accepts `project`, `env`, `resources`, `sns_topic_arns`, `common_tags`, and default threshold variables. The `resources` input (including per-resource `overrides`) and `sns_topic_arns` have `validation {}` blocks.
-- `main.tf`: defines `locals` with a `default_severities` map (per-metric severity), data sources to resolve resource IDs from names, and one `aws_cloudwatch_metric_alarm` per metric
-- `outputs.tf`: exports `alarm_arns` and `alarm_names` maps keyed by `"<resource-key>:<metric-name>"`
+## Module pattern
 
-Threshold resolution uses a `coalesce()` chain: per-resource override → calculated value (if applicable) → module default variable.
+- `variables.tf` — `project`, `env`, `resources`, `sns_topic_arns`,
+  `common_tags`, plus per-metric default variables. `resources` (including
+  per-resource `overrides`) and `sns_topic_arns` carry `validation {}` blocks.
+- `main.tf` — a `locals` block with a per-metric `default_severities` map, data
+  sources resolving resource IDs from names, one `aws_cloudwatch_metric_alarm`
+  per metric.
+- `outputs.tf` — `alarm_arns` and `alarm_names`, keyed `"<resource-key>:<metric-name>"`.
 
-`overrides.disabled_alarms` is an optional `set(string)` of metric IDs to skip for a resource (opt-out; default `[]` = all metrics on). Each alarm's `for_each` filters out resources whose `disabled_alarms` contains its metric ID, so no alarm is created (no cost, not just muted). Valid IDs are the labels of the module's *active* `aws_cloudwatch_metric_alarm` resources, enforced by a `validation {}` block; commented-out alarms (e.g. CloudFront `error_4xx`/`cache_hit_rate`, RDS `volume_bytes_used`) are excluded. Two exceptions: S3 replication is gated by `overrides.replication_enabled` (opt-in, not `disabled_alarms`), and the Lambda account-level concurrency alarm is gated by the module input `concurrency_alarm_enabled`.
+Threshold resolution is a `coalesce()` chain: per-resource override →
+calculated value (where one applies) → module default variable.
 
-### Alarm Naming & Description
+### Two different "off" switches — they are not interchangeable
 
-- Name: `{Project}-{Env}-{ResourceType}-[{ResourceName}]-{MetricName}`. Project-first matches the `stacks/projects/<project>/<env>/` layout; env follows it (each env is its own account, so env is for cross-account dashboards / payloads, not in-account grouping). Each module builds `{Project}-{Env}-{ResourceType}` once as `local.name_prefix` (from `var.project` + `var.env`) and reuses it for both `alarm_name` and the description fallback — change the convention there, not per-alarm.
-- Description prefix: `[{SEVERITY}]-` followed by the description text
+- **`enabled = false`** only empties `alarm_actions` / `ok_actions`. The alarm
+  still exists, evaluates, costs, and shows red — it just notifies nobody.
+- **`overrides.disabled_alarms`** removes the alarm outright (below).
 
-### Severity → SNS Routing
+Picking the wrong one is quiet either way: `enabled = false` expecting no alarm
+leaves a permanently red alarm nobody is paged for; `disabled_alarms` expecting
+a mute destroys the alarm's history.
 
-Three severity levels (WARN / ERROR / CRIT) map to distinct SNS topic ARNs via `var.sns_topic_arns`. The CloudFront module uses `var.sns_topic_arns_global` because CloudFront metrics are only available in `us-east-1` (a separate provider alias).
+> **⚠️ `enabled` is not plumbed through every stack variable.** All 13 modules
+> accept it, but a stack's `variables.tf` declares it on only some types.
+> Terraform **silently drops** object attributes the target type does not
+> declare — no error, no warning, `terraform validate` still passes. So on a
+> type whose stack variable omits it, `enabled = false` does nothing and **the
+> alarm still pages**. Check the stack's `variables.tf` first.
+>
+> Same rule in reverse: trimming a field from a module does not remove it from
+> stacks and examples. Grep for it; validate will not find it.
 
-The tiers are a **routing contract, not labels**: CRIT reaches a pager and wakes someone at any hour, ERROR reaches chat and is handled in working hours, WARN is a digest read deliberately. Classification follows from that — CRIT holds only user-visible symptoms and liveness (alb `elb_5xx`/`target_5xx`/`unhealthy_host`/`target_response_time`, asg capacity, ec2 status checks, rds `engine_uptime`), causes sit at ERROR until their lead time is measured, and saturation trends sit at WARN. See `docs/superpowers/specs/2026-07-31-alerting-policy-design.md` for the full classification and the promotion criterion a signal must meet to reach CRIT.
+### Opting out: `overrides.disabled_alarms`
 
-`apigateway error_5xx` stays WARN deliberately: the customer-facing path is covered by a synthetic canary alarm that lives outside this repo. Do not "fix" it without checking that canary still exists.
+An optional `set(string)` of metric IDs to skip for one resource. Opt-out, so
+the default empty set means every metric is on. Each alarm's `for_each` filters
+the resource out entirely, so **no alarm is created** — not created-and-muted,
+meaning no cost.
 
-### Multi-Series Alarms (the `ORDER BY` rule)
+Valid IDs are the resource labels of the module's *active*
+`aws_cloudwatch_metric_alarm` blocks, enforced by a `validation {}` block;
+commented-out alarms are excluded. Two alarms are gated differently and are not
+reachable through `disabled_alarms`: S3 replication is opt-**in** via
+`overrides.replication_enabled`, and the Lambda account-level concurrency alarm
+is gated by the module input `concurrency_alarm_enabled`.
 
-Every fleet alarm — ASG `cpu`/`memory`/`disk`, JMX `heap_used`/`gc_time` — is one alarm watching many instances via `GROUP BY InstanceId`. Each returned series is a **contributor**; the alarm enters ALARM as soon as one contributor breaches, and membership re-resolves at every evaluation (that is what makes CodeDeploy churn free).
+## Alarm naming
 
-Two hard API constraints govern this, both learned from a failed apply on 2026-07-31:
+`{Project}-{Env}-{ResourceType}-[{ResourceName}]-{MetricName}`, with the
+description prefixed `[{SEVERITY}]-`.
 
-1. **`ORDER BY` is mandatory, not decorative.** `PutMetricAlarm` rejects any expression returning multiple time series — `ValidationError: Metrics expression that return multi time series are only allowed for MetricsInsights expression with an ORDER BY clause`. A `GROUP BY` query without `ORDER BY` passes `terraform validate`, passes `get-metric-data` (so it graphs fine and the preflight scripts are happy), and fails only at apply. `ORDER BY` also chooses which 500 series are evaluated once a group exceeds that cap, so the direction matters: these alarms use `ORDER BY AVG() DESC` because they all fire on high values.
-2. **Metric math cannot wrap a multi-series query.** The exception above is only for a *Metrics Insights* expression. `DIFF(q1)` / `RATE(q1)` over a `GROUP BY` query is metric math and is rejected no matter what `q1` contains. This is why JMX `gc_time` cannot use `DIFF`/`RATE`: it is instead a bare Insights query over a metric the agent already delivers as a per-interval delta; a math expression may back an alarm only when it resolves to a single series (EFS `throughput_util` does).
+Project-first mirrors the `stacks/projects/<project>/<env>/` layout. Env follows
+it because each env is its own account, so env matters for cross-account
+dashboards and payloads, not for grouping within an account.
 
-Corollary for anything new: graphing a query in `get-metric-data` proves nothing about whether it can back an alarm. Create one alarm by hand before building a module around the shape.
+Each module builds the `{Project}-{Env}-{ResourceType}` part once as
+`local.name_prefix`. **Change the convention there, never per-alarm** — alarm
+names are the CloudWatch API's identity (see the ASG footgun below).
 
-### Identity Carriers (EC2 tags vs CWAgent dimensions)
+## Severity is a routing contract, not a label
 
-Two independent carriers, easy to conflate:
+Three levels map to distinct SNS topic ARNs via `var.sns_topic_arns`:
 
-- **`app_tag_key`** (module var, default `AppName`) is an **EC2/ASG resource tag key**, used by exactly two queries — the ASG module's `in_service_capacity` (`AWS/AutoScaling`, tag on the ASG itself) and `cpu` (`AWS/EC2`, tag on each instance). It requires the account-level "resource tags on telemetry" setting, per account **and** per region.
-- **`AppName`** is a **CWAgent dimension**, a literal string in the agent config (`append_dimensions` cannot read arbitrary tags). Every CWAgent-sourced alarm — the ASG module's `memory`/`disk` and all of JMX — matches on this and ignores resource tags entirely.
-- The `ec2` module uses neither: it resolves instances by `tag:Name`.
+- **CRIT** reaches a pager and wakes someone at any hour.
+- **ERROR** reaches chat, handled in working hours.
+- **WARN** is a digest, read deliberately.
 
-The resource tag, the agent-config dimension value, and the stack's `app_name` must be kept in sync by hand; drift fails silently green for every alarm except capacity. That is why the preflight scripts exercise both a tag-scoped native query and a dimension-scoped CWAgent query.
+Classification follows from that, not from how bad a metric sounds. CRIT holds
+only user-visible symptoms and liveness — ALB `elb_5xx` / `target_5xx` /
+`unhealthy_host` / `target_response_time`, ASG capacity, EC2 status checks, RDS
+`engine_uptime`. Causes sit at ERROR until their lead time has been *measured*.
+Saturation trends sit at WARN.
 
-### Special Module Behaviors
+Full classification and the promotion criterion a signal must meet to reach
+CRIT: `docs/superpowers/specs/2026-07-31-alerting-policy-design.md`.
 
-- **ALB**: Requires `target_groups` (target group names) per resource — UnHealthyHostCount is only published per `(TargetGroup, LoadBalancer)`, so that alarm fans out to one per ALB/target-group pair (keyed `"<alb>:<tg>"`). Omitting `target_groups` is only valid when `unhealthy_host` is in `disabled_alarms`.
-- **EC2**: Looks up instance IDs via `data.aws_instance` (Name tag). Memory alarm uses CWAgent namespace — requires CloudWatch Agent installed. A `check {}` block warns at plan time if the Name tag matches zero or multiple instances. A `disk` alarm (`disk_used_percent`, `{InstanceId, path="/"}`) requires the agent's `[InstanceId, path]` rollup from `cwagent/ec2-java/`.
-- **RDS**: Uses a flat `resources` list with `is_cluster` and `serverless` flags per entry. For clusters, it expands cluster members via `data.aws_rds_cluster`. FreeableMemory and DatabaseConnections thresholds are auto-calculated from instance class RAM using `instance_memory_map`. Aurora Serverless v2 resources set `serverless = true` to get ACUUtilization and ServerlessDatabaseCapacity alarms. Two alarms are engine-gated via the `data.aws_db_instance` engine: FreeStorageSpace is created only for non-Aurora engines, EngineUptime only for Aurora (each is missing-data=breaching and would be permanently in ALARM on the wrong engine).
-- **S3**: The OperationsFailedReplication alarm (gated by `overrides.replication_enabled`) also requires `overrides.replication_destination_bucket`; `overrides.replication_rule_id` defaults to `"EntireBucket"`. The metric only exists per `(SourceBucket, DestinationBucket, RuleId)`.
-- **ASG**: Requires `desired_capacity` per resource. Two modes per entry: legacy (no `app_name`) keeps the classic `AutoScalingGroupName`-dimension GroupInServiceCapacity alarm; fleet mode (`app_name` set) targets CodeDeploy-churned ASGs whose instance IDs and ASG-name suffix change every deploy — four `AppName`-scoped Metrics Insights alarms (capacity `SUM` watchdog missing-data=breaching; per-instance CPU/memory-guardrail/disk via `GROUP BY InstanceId`, missing-data=notBreaching) that re-resolve membership at every evaluation, so churn needs no re-apply. OS memory defaults to 90 (guardrail: JVM hosts sit at 75–85% by design; heap_used is the real memory signal). Identity contract: tfvars `app_name` = `AppName` tag on instances+ASG = CWAgent `AppName` dimension (see `cwagent/ec2-java/`); requires the CloudWatch "resource tags on telemetry" account setting for the native-metric queries. `app_name` is validated non-empty — `app_name = ""` would otherwise latch fleet mode and render `WHERE tag.AppName = ''`. JVM heap/GC for fleet instances lives in the **JMX** module, keyed by the same `app_name`.
-  - **⚠️ Flipping an existing entry between modes takes TWO applies.** `in_service_capacity` (legacy) and `fleet_in_service_capacity` render the *same* alarm name by design, so adding `app_name` to an entry already in state puts a create and a destroy of that one CloudWatch alarm in a single plan with no dependency edge between them — `PutMetricAlarm` upserts by name and `DeleteAlarms` deletes by name, so if the destroy lands second it silently removes the just-created CRIT-severity capacity watchdog while state claims it exists. Procedure: remove the entry → apply → re-add it with `app_name` → apply (or delete the legacy alarm out-of-band plus `terraform state rm` before the apply that adds `app_name`). Same in reverse when removing `app_name`. A `moved` block cannot express this — it is static and would also move entries that stay legacy. The three per-instance fleet alarm names (CPU/memory/disk) have no legacy counterpart and are unaffected. See the MIGRATION FOOTGUN comment in the module's `main.tf`.
-- **Lambda**: Requires `timeout_ms` per resource (used to compute the duration threshold; Errors and Throttles alarms use `default_errors_threshold`/`default_throttles_threshold`, both 1). Account-level concurrency alarm is created once, not per-function.
-- **CloudFront**: Uses `distribution_id` as the primary key (with optional `name` for alarm naming).
-- **EFS**: Identified by `file_system_id` (`fs-xxxx`) directly — no Name-tag lookup (the AWS provider has no tag-filtered EFS data source). The single `throughput_util` alarm is the repo's only **metric-math** alarm (the ASG fleet and JMX alarms are Metrics Insights queries, not math — see "Multi-Series Alarms"): throughput utilization % = `Sum(MeteredIOBytes)/PERIOD ÷ Average(PermittedThroughput)`. Watched over a long span (default `period=3600` × `evaluation_periods=6` = 6h sustained ≥80%) to catch a creeping throughput-bottleneck trend rather than short spikes; `period`/`evaluation_periods`/`throughput_util_threshold` are overridable. `treat_missing_data="notBreaching"` (idle EFS must not alarm).
-- **JMX**: Heap and GC alarms for Java apps on EC2, identified by the CloudWatch Agent's `AppName` **dimension** — there is no instance lookup, so duplicate Name tags (normal inside an ASG) are irrelevant and CodeDeploy blue/green churn needs no re-apply. The alarm is a Metrics Insights query with `GROUP BY InstanceId`, so one entry covers a whole fleet (or several interchangeable standalone hosts sharing an `app_name`) and ALARMs when **any** instance breaches; membership re-resolves at every evaluation. `heap_used` is a **byte** threshold (`heap_threshold` % × `heap_max_bytes`, the JVM `-Xmx` — default 90% of heap_max_bytes for 10 consecutive minutes, overridable via `overrides.heap_evaluation_periods`) because CloudWatch math cannot divide two `GROUP BY` series arrays — hence `heap_max_bytes` is required unless `heap_used` is disabled; don't compute it by hand, `scripts/resolve_heap_max.sh` emits it from the observed `jvm_memory_heap_max`. `gc_time` = `SELECT SUM(jvm_gc_collections_elapsed) … GROUP BY InstanceId ORDER BY SUM() DESC`, thresholded in **ms of GC per minute** (default 6000 = 10% of wall clock) over 5 consecutive minutes. It needs no metric math: the agent's `cumulativetodelta/jmx` processor converts the counter before publishing, so the metric arrives as a per-interval delta — which also means the threshold's meaning is tied to `metrics_collection_interval: 60`. An earlier `DIFF(q1)` form was wrong twice (rejected by `PutMetricAlarm`, and differencing an already-differenced series). `process_group` adds `AND ProcessGroupName = …` for hosts running more than one JVM. Depends on `cwagent/ec2-java/` (namespace `CWAgent`, `AppName` + `ProcessGroupName` + `InstanceId` dimensions, snake_case `jvm_*` names, 60s). The alarm is `notBreaching`; "the host is gone" is the EC2 module's `status_check` or the ASG capacity watchdog, both missing-data=breaching. **Known limitation — one `app_name` covers one JVM per host.** `app_name` is validated unique across entries, so a host running two JVMs cannot get one entry per `process_group`: setting `process_group` alarms a single JVM and leaves the other watched by no module at all, while omitting it makes `AVG(jvm_memory_heap_used) … GROUP BY InstanceId` average both `ProcessGroupName` series against one `heap_max_bytes` — `chat-server-tomcat` (`-Xmx12G`) at 11.9G beside `batch-worker` (`-Xmx2G`) at 0.2G averages to ~6.05G under a `0.85 × 12G = 10.95G` threshold, so the near-OOM JVM never fires. That is the silently-green class this design exists to remove, accepted only because there are no multi-JVM hosts today; the fix when one appears is to key uniqueness on the `app_name` + `process_group` pair and reject two entries sharing an `app_name` where either omits `process_group`.
+`apigateway error_5xx` stays WARN **deliberately** — the customer-facing path is
+covered by a synthetic canary alarm maintained outside this repo. Do not "fix"
+it without first confirming that canary still exists.
 
-### Dashboards
+CloudFront uses `var.sns_topic_arns_global`, because its metrics exist only in
+`us-east-1` and it runs through a separate provider alias.
 
-`modules/cloudwatch/dashboard/jmx/` builds the JVM dashboard via `jsonencode` and exposes the body as the `dashboard_json` output. Every widget is a Metrics Insights query scoped by `AppName` and grouped by `InstanceId`, so widget content resolves at render time and follows fleet churn with no Terraform run; its input is `targets` — pass the JMX alarm module's `dashboard_targets` output. `dashboards/jmx-jvm.json` is an importable snapshot of the same layout. `cwagent/jmx/` (dimension `InstanceId` only, no `AppName`) is superseded by `cwagent/ec2-java/`, the full Java-host template (JMX + system metrics, `AppName`/`ProcessGroupName`/`InstanceId` dimensions) both the alarms and this dashboard depend on; its live copies live in SSM Parameter Store, outside the alarm modules — this repo manages alarms/dashboards, not compute.
+## Multi-series alarms — the `ORDER BY` rule
 
-### Preflight Checks
+Every fleet alarm (ASG `fleet_cpu` / `fleet_memory` / `fleet_disk`, JMX
+`heap_used` / `gc_time`) is **one** alarm watching many instances via
+`GROUP BY InstanceId`. Each returned series is a *contributor*; the alarm enters
+ALARM as soon as any one breaches, and membership re-resolves at every
+evaluation. That is what makes CodeDeploy churn free — no re-apply.
 
-`scripts/check_ec2_mem_metric.sh`, `scripts/check_asg_metrics.sh`, `scripts/check_asg_fleet_metrics.sh`, `scripts/check_s3_metrics.sh`, and `scripts/check_jmx_metrics.sh` verify that prerequisite CloudWatch metrics exist before alarms are applied (the JMX check matters most: both JMX alarms treat missing data as notBreaching, so a host without the cwagent JMX config would otherwise sit green forever). `check_ec2_mem_metric.sh` covers both CWAgent-fed EC2 alarms: `mem_used_percent` at `{InstanceId}` and `disk_used_percent` at `{InstanceId, path=/}` (the disk series needs the `cwagent/ec2-java/` template; `cwagent/jmx/` does not publish it), skipping per entry on `memory`/`disk` in `disabled_alarms`. `check_asg_metrics.sh` covers **legacy** ASG entries only — it skips entries with `app_name`, whose `name` is a logical label and whose real ASG name churns every deploy. The ASG fleet check (`check_asg_fleet_metrics.sh`) runs the alarms' actual Metrics Insights SELECTs via `get-metric-data`, each at the period of the alarm it mirrors (capacity 60s, per-instance 300s) so printed values are comparable with `desired_capacity` — the capacity and CPU queries prove tag telemetry on `AWS/AutoScaling` and `AWS/EC2` (separate paths) and the CWAgent queries (`mem_used_percent`, `disk_used_percent`) prove the `AppName` series end-to-end. Every per-metric check there honours `disabled_alarms` (`cpu`, `memory`, `disk`), matching `check_ec2_mem_metric.sh`. It needs `cloudwatch:GetMetricData` on the preflight role, and a failed CLI call is reported as an ERROR with the CLI's own message rather than as "no data". It accepts `--app-tag-key` (default `AppName`) for the two native-metric queries (capacity, CPU) and the `describe-instances` tag filter, mirroring the module's `app_tag_key` variable — the CWAgent queries stay hardcoded to the `AppName` dimension, which is fixed by the agent config and is not the tag key. JVM heap prerequisites moved out of this script entirely: the rewritten `check_jmx_metrics.sh` runs both JMX alarms' own Insights SELECTs (`jvm_memory_heap_used` and `jvm_gc_collections_elapsed`, both `GROUP BY InstanceId` and `ProcessGroupName`-scoped when the entry sets `process_group`) and separately reconciles each entry's `heap_max_bytes` (evaluated as a literal int expression, so `12 * 1024 * 1024 * 1024` works) against the observed `jvm_memory_heap_max` (±10%); entries missing `app_name` or `name` are counted as malformed and fail the run rather than being silently skipped. Three properties hold across all five scripts (the two Insights-based ones especially, since a silent pass there is what lets a typo'd `app_name` reach production green): the tfvars parsers strip line comments before their brace/bracket counting, so a commented-out entry is never treated as live and an unbalanced brace inside a comment cannot truncate the list; matching `<var>_resources = [` but extracting no entries is an ERROR + exit 1, with exit 0 reserved for a genuinely absent variable or a literal empty list; and each `GROUP BY InstanceId` result set is read as a set — the first series that actually has a datapoint, plus the series count — never `MetricDataResults[0]`, which can be an instance terminated inside the ~3h Insights lookback but outside the scripts' 1h window. On a no-data result both Insights scripts run `list-metrics --recently-active PT3H` (needs `cloudwatch:ListMetrics`) to separate "metric absent" from "filter matched nothing". They accept `--tfvars <path>` and are invoked by `.github/workflows/preflight.yml` on PRs that touch `stacks/projects/**/terraform.tfvars`. Requires `PREFLIGHT_READ_ROLE_ARN` GitHub secret (read-only CloudWatch/EC2/S3 IAM role).
+Two hard API constraints govern this. Both were learned from a failed apply on
+2026-07-31, not from documentation:
 
-To run locally: `scripts/check_ec2_mem_metric.sh --tfvars stacks/projects/<project>/<env>/terraform.tfvars`
+1. **`ORDER BY` is mandatory, not decorative.** `PutMetricAlarm` rejects any
+   expression returning multiple time series:
+   `ValidationError: Metrics expression that return multi time series are only
+   allowed for MetricsInsights expression with an ORDER BY clause`. A
+   `GROUP BY` query without it passes `terraform validate`, passes
+   `get-metric-data` (so it graphs fine and the preflight scripts go green),
+   and fails only at apply. `ORDER BY` also selects which 500 series are
+   evaluated once a group exceeds that cap — so its *direction* is load-bearing.
+   These alarms all fire on high values and order descending accordingly.
+2. **Metric math cannot wrap a multi-series query.** The exception above is for
+   a *Metrics Insights* expression only. `DIFF()` / `RATE()` over a `GROUP BY`
+   query is metric math and is rejected regardless of what it wraps. A math
+   expression may back an alarm only when it resolves to a single series — EFS
+   `throughput_util` is the one place that holds.
 
-### Adding a New Resource Type
+**Corollary for anything new:** graphing a query in `get-metric-data` proves
+nothing about whether it can back an alarm. Create one alarm by hand before
+building a module around a new query shape.
 
-1. Create `modules/cloudwatch/metrics-alarm/<type>/variables.tf` and `modules/cloudwatch/metrics-alarm/<type>/main.tf` following the existing module pattern.
+## Identity carriers: EC2 tags vs CWAgent dimensions
+
+Two independent mechanisms, easy to conflate, and conflating them fails green.
+
+- **`app_tag_key`** (module variable) is an **EC2/ASG resource tag key**. Used
+  by exactly two queries: the ASG module's capacity alarm (`AWS/AutoScaling`,
+  tag on the ASG) and its CPU alarm (`AWS/EC2`, tag on each instance). Requires
+  the account-level "resource tags on telemetry" setting — per account **and**
+  per region.
+- **`AppName`** is a **CWAgent dimension**: a literal string in the agent
+  config, because `append_dimensions` cannot read arbitrary tags. Every
+  CWAgent-sourced alarm — ASG memory/disk, all of JMX — matches on this and
+  ignores resource tags entirely.
+- The **`ec2`** module uses neither; it resolves instances by `tag:Name`.
+
+The resource tag, the agent-config dimension value, and the stack's `app_name`
+are kept in sync **by hand**. Drift fails silently green for every alarm except
+capacity. That is why the preflight scripts deliberately exercise both a
+tag-scoped native query and a dimension-scoped CWAgent query.
+
+## Per-module decisions
+
+Defaults, thresholds and query text for each live in its module directory.
+Recorded here is only what the code cannot explain about itself.
+
+- **ALB** — `target_groups` is required per resource because UnHealthyHostCount
+  is published only per `(TargetGroup, LoadBalancer)`; that alarm fans out one
+  per ALB/target-group pair. Omitting `target_groups` is valid only when the
+  unhealthy-host alarm is disabled.
+- **EC2** — resolves instances via `data.aws_instance` on the Name tag. A
+  `check {}` block warns at plan time when the Name tag matches zero or several
+  instances. Memory and disk come from the CWAgent namespace, so they need the
+  agent installed; the disk series specifically needs the `[InstanceId, path]`
+  rollup from `cwagent/ec2-java/`.
+- **RDS** — one flat `resources` list with `is_cluster` and `serverless` flags.
+  Clusters expand into their members via `data.aws_rds_cluster`. FreeableMemory
+  and DatabaseConnections thresholds are calculated from instance-class RAM
+  rather than configured. Two alarms are engine-gated off `data.aws_db_instance`:
+  FreeStorageSpace for non-Aurora only, EngineUptime for Aurora only — each
+  treats missing data as breaching, so on the wrong engine it would sit
+  permanently in ALARM.
+- **S3** — the replication alarm is opt-in and also needs a destination bucket,
+  because the metric exists only per `(SourceBucket, DestinationBucket, RuleId)`.
+- **ASG** — see below.
+- **Lambda** — `timeout_ms` is required per resource; the duration threshold is
+  derived from it. The account-level concurrency alarm is created once, not per
+  function.
+- **CloudFront** — keyed by `distribution_id`, with `name` optional and used
+  only for alarm naming.
+- **EFS** — identified by `file_system_id` directly; there is no Name-tag
+  lookup because the AWS provider has no tag-filtered EFS data source. Its
+  single alarm is the repo's **only metric-math alarm** (throughput utilization
+  = metered bytes over permitted throughput). It is watched over a deliberately
+  long span to catch a creeping bottleneck rather than short spikes, and treats
+  missing data as not breaching, because an idle file system must not alarm.
+- **JMX** — see below.
+- **ElastiCache / OpenSearch / SES** — no special behaviour; they follow the
+  module pattern exactly.
+
+### ASG
+
+Requires `desired_capacity` per resource. Each entry is in one of two modes:
+
+- **Legacy** (no `app_name`) — the classic `AutoScalingGroupName`-dimension
+  capacity alarm.
+- **Fleet** (`app_name` set) — for CodeDeploy-churned ASGs whose instance IDs
+  and ASG-name suffix change on every deploy. Four `AppName`-scoped Metrics
+  Insights alarms: a capacity watchdog (missing data = **breaching**) and three
+  per-instance guardrails grouped by `InstanceId` (missing data = not
+  breaching). Membership re-resolves every evaluation, so churn needs no
+  re-apply.
+
+The OS-memory guardrail sits high on purpose: JVM hosts run hot by design, and
+heap — not OS memory — is the real signal. JVM heap and GC for fleet instances
+live in the **JMX** module, keyed by the same `app_name`.
+
+Identity contract: tfvars `app_name` = the `AppName` tag on instances *and* the
+ASG = the CWAgent `AppName` dimension (`cwagent/ec2-java/`). `app_name` is
+validated non-empty, because an empty string would latch fleet mode and render
+a `WHERE tag.AppName = ''` that silently matches nothing.
+
+> **⚠️ Flipping an existing entry between modes takes TWO applies.**
+>
+> The legacy and fleet capacity alarms render the **same alarm name** by design.
+> Adding `app_name` to an entry already in state therefore puts a create and a
+> destroy of one CloudWatch alarm in a single plan, with no dependency edge
+> between them. `PutMetricAlarm` upserts by name and `DeleteAlarms` deletes by
+> name — so if the destroy lands second, it silently removes the CRIT capacity
+> watchdog that was just created, while state claims it exists.
+>
+> Procedure: remove the entry → apply → re-add it with `app_name` → apply.
+> (Or delete the legacy alarm out-of-band and `terraform state rm` it before
+> the apply that adds `app_name`.) The same applies in reverse.
+>
+> A `moved` block cannot express this: it is static and would also move entries
+> that stay legacy. The three per-instance fleet alarms have no legacy
+> counterpart and are unaffected. See the MIGRATION FOOTGUN comment in the
+> module's `main.tf`.
+
+### JMX
+
+Heap and GC alarms for Java apps on EC2, identified by the CloudWatch Agent's
+`AppName` **dimension**. There is no instance lookup, so duplicate Name tags
+(normal inside an ASG) are irrelevant and blue/green churn needs no re-apply.
+One entry covers a whole fleet, or several interchangeable standalone hosts
+sharing an `app_name`.
+
+- `heap_used` is thresholded in **bytes**, not percent, because CloudWatch math
+  cannot divide two `GROUP BY` series arrays. `heap_max_bytes` (the JVM `-Xmx`)
+  is therefore required unless the alarm is disabled. Don't compute it by hand
+  — `scripts/resolve_heap_max.sh` emits it from the observed metric.
+- `gc_time` needs no metric math: a `cumulativetodelta` processor on the
+  agent's `jmx` pipeline converts the counter before publishing, so it arrives
+  as a per-interval delta. **The threshold's meaning is therefore tied to the
+  agent's `metrics_collection_interval`** — change one, revisit the other, and
+  see `cwagent/ec2-java/README.md`. An earlier `DIFF()` form was wrong twice
+  over: rejected by `PutMetricAlarm`, and differencing an already-delta series.
+- `process_group` narrows the query to one JVM on hosts running several.
+- Alarms treat missing data as not breaching. "The host is gone" is the EC2
+  module's status check or the ASG capacity watchdog — both breaching.
+
+Depends on `cwagent/ec2-java/`: namespace `CWAgent`, dimensions `AppName` /
+`ProcessGroupName` / `InstanceId`, snake_case `jvm_*` metric names.
+
+> **Known limitation — one `app_name` covers one JVM per host.**
+> `app_name` is validated unique across entries, so a host running two JVMs
+> cannot get one entry per `process_group`. Setting `process_group` alarms one
+> JVM and leaves the other watched by nothing at all; omitting it averages both
+> `ProcessGroupName` series against a single `heap_max_bytes`, so a large JVM
+> near OOM is dragged under the threshold by a small idle one and never fires.
+>
+> This is exactly the silently-green class the design exists to remove,
+> accepted only because there are no multi-JVM hosts today. The fix when one
+> appears: key uniqueness on the (`app_name`, `process_group`) pair, and reject
+> two entries sharing an `app_name` where either omits `process_group`.
+
+## Dashboards
+
+`modules/cloudwatch/dashboard/jmx/` builds the JVM dashboard with `jsonencode`
+and exposes it as `dashboard_json`. Every widget is a Metrics Insights query
+scoped by `AppName` and grouped by `InstanceId`, so **widget content resolves at
+render time** and follows fleet churn with no Terraform run. Its input is
+`targets` — pass the JMX alarm module's `dashboard_targets` output.
+`dashboards/jmx-jvm.json` is an importable snapshot of the same layout.
+
+`cwagent/jmx/` (dimension `InstanceId` only) is **superseded** by
+`cwagent/ec2-java/`, the full Java-host template that both the alarms and this
+dashboard depend on. Live agent configs are held in SSM Parameter Store,
+outside this repo — this repo manages alarms and dashboards, not compute.
+
+## Preflight checks
+
+`scripts/check_*.sh` verify that prerequisite CloudWatch metrics actually exist
+*before* alarms are applied. This matters most for the JMX and ASG fleet checks:
+those alarms treat missing data as not breaching, so a host missing its agent
+config would otherwise sit green forever.
+
+The two Insights-based checks run the alarms' **own** SELECT statements through
+`get-metric-data`, each at the period of the alarm it mirrors, so printed values
+are directly comparable with configured capacity. They also reconcile each JMX
+entry's declared `heap_max_bytes` against the observed maximum.
+
+Three invariants hold across all the scripts. Each exists because a silent pass
+is what lets a typo'd `app_name` reach production green:
+
+1. The tfvars parsers strip line comments before brace counting — a
+   commented-out entry is never treated as live, and an unbalanced brace inside
+   a comment cannot truncate the list.
+2. Matching a `<var>_resources = [` but extracting no entries is an **error**.
+   Exit 0 is reserved for a genuinely absent variable or a literal empty list.
+3. Each `GROUP BY InstanceId` result is read as a **set** — first series with
+   an actual datapoint, plus the series count — never index 0, which can be an
+   instance terminated inside the Insights lookback but outside the script's
+   window.
+
+On a no-data result the Insights scripts fall back to `list-metrics
+--recently-active` to distinguish "metric absent" from "filter matched
+nothing". A failed CLI call is reported as an error carrying the CLI's own
+message, never as "no data".
+
+Run locally with `--tfvars`:
+
+```bash
+scripts/check_ec2_mem_metric.sh --tfvars stacks/projects/<project>/<env>/terraform.tfvars
+```
+
+Each script's source is authoritative for its flags and exactly which entries
+and metrics it covers.
+
+## CI
+
+- `.github/workflows/terraform-ci.yml` — on PRs touching `modules/**` or
+  `stacks/**`: fmt, `terraform validate` per stack and per library module,
+  TFLint.
+- `.github/workflows/preflight.yml` — on PRs touching
+  `stacks/projects/**/terraform.tfvars`: runs the preflight scripts. Needs the
+  `PREFLIGHT_READ_ROLE_ARN` secret (a read-only CloudWatch/EC2/S3 role) with
+  `cloudwatch:GetMetricData` and `cloudwatch:ListMetrics`.
+
+## Adding a new resource type
+
+1. Create `modules/cloudwatch/metrics-alarm/<type>/{variables,main}.tf`
+   following the module pattern above.
 2. Add `outputs.tf` exporting `alarm_arns` and `alarm_names`.
-3. Add the `<type>_resources` list variable to each project stack `variables.tf` that needs it (mirroring the module's `resources` type, minus defaults the module already applies).
-4. Add a `module "<type>_alarms"` block to the stack's `main.tf` with `count = length(var.<type>_resources) > 0 ? 1 : 0`.
-5. Add `<type> = try(module.<type>_alarms[0].alarm_arns, {})` (and the `alarm_names` twin) to the stack's `outputs.tf` — remote-state consumers only see alarms that are exported here.
-6. **On a YAML-wired leaf, repeat step 4 there and add `<type>` to `local.wired_resource_types`.** Steps 3–4 describe the `var.<type>_resources` form used by the leaves in this repo. A leaf that reads deploy intent from `config.yaml` (`yamldecode`; see `docs/superpowers/plans/2026-06-09-tfvars-to-yaml-wiring.md` and `stacks/projects/billing/dev/config.yaml.example`) wires the module block as `count = length(try(local.res.<type>, [])) > 0 ? 1 : 0` / `resources = try(local.res.<type>, [])` instead, and that mapping does **not** arrive with a synced `main.tf`. Skipping it is silent: a `resources:` key no module block reads creates nothing, errors nothing, and never runs the library module's `validation` blocks, so a typo'd identity in that block is never reported either. `stacks/projects/billing/dev/config_guard.tf.example` is a drop-in `check {}` that names any unconsumed key at plan time — it is the only thing that makes this class of miss audible, and its type list is hand-maintained, so update it in the same commit.
+3. Add the `<type>_resources` variable to each project stack's `variables.tf`
+   that needs it, mirroring the module's `resources` type minus defaults the
+   module already applies.
+4. Add a `module "<type>_alarms"` block to the stack's `main.tf`, gated
+   `count = length(var.<type>_resources) > 0 ? 1 : 0`.
+5. Add `<type>` to the stack's `outputs.tf` (both the `alarm_arns` and
+   `alarm_names` maps) — **remote-state consumers see only what is exported
+   here.**
+6. **On a YAML-wired leaf, repeat step 4 there and add `<type>` to
+   `local.wired_resource_types`.** Steps 3–4 describe the tfvars form used by
+   the leaves in this repo. A `config.yaml` leaf wires the module against
+   `try(local.res.<type>, [])` instead, and that mapping does **not** arrive
+   with a synced `main.tf`.
+
+   Skipping it is silent in every direction: a `resources:` key no module block
+   reads creates nothing, errors nothing, and never runs the library module's
+   `validation` blocks — so a typo'd identity inside it is never reported
+   either. `config_guard.tf.example` is a drop-in `check {}` that names any
+   unconsumed key at plan time. It is the only thing that makes this class of
+   miss audible, and **its type list is hand-maintained — update it in the same
+   commit.**
+
+## Not currently wired
+
+`modules/cloudwatch/synthetics-canary/heartbeat/` exists and is called by no
+stack. Note it takes `project` but not `env`, so it does not yet follow the
+alarm modules' naming convention.
+
+`scripts/migrate/` (`generate-split.sh`, `scaffold-leaf.sh`) are one-off
+refactor helpers from the M1–M4 split, kept for scaffolding new leaves.

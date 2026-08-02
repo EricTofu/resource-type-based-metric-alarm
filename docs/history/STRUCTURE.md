@@ -1,3 +1,9 @@
+> **Superseded — historical record only.** A refactor draft with open questions, never the built structure. The real layout has no `template/` wrapper and no region tier, and uses `stacks/projects/` rather than `stacks/services/`.
+>
+> Current truth: [`CLAUDE.md`](../../CLAUDE.md) and the code.
+
+---
+
 # Refactor the project structure
 
 ## Target

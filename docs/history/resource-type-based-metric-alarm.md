@@ -1,3 +1,9 @@
+> **Superseded — historical record only.** The original feature request that started the project, kept as provenance. The metric lists here are the January baseline and have since been extended and revised.
+>
+> Current truth: [`CLAUDE.md`](../../CLAUDE.md) and the code.
+
+---
+
 # Resource Type Based Metric Alarms
 
 ## Request
