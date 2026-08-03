@@ -18,9 +18,9 @@ output "dashboard_targets" {
   description = "Host groups for modules/cloudwatch/dashboard/jmx — pass straight to its `targets` input. Replaces the old `instance_ids` output: the dashboard now uses Metrics Insights and needs no resolved instance IDs."
   value = [
     for k, v in local.jmx_resources : {
-      name          = v.name
-      app_name      = v.app_name
-      process_group = v.process_group
+      name                    = v.name
+      cwagent_dimension_value = v.cwagent_dimension_value
+      process_group           = v.process_group
     }
   ]
 }

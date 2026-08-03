@@ -9,13 +9,13 @@ variable "env" {
 }
 
 variable "resources" {
-  description = "Java host groups to monitor, identified by the CWAgent AppName dimension (see cwagent/ec2-java/). One entry may cover several instances — ASG fleet members, or interchangeable standalone hosts sharing an AppName — because alarms fan out per InstanceId at evaluation time. `name` is a label for alarm naming and output keys only; it is NOT a Name-tag lookup. One entry covers one JVM per host: app_name is validated unique across entries, so a host running a second JVM cannot be given an entry of its own, and process_group narrows an existing entry's queries rather than permitting an additional entry under the same app_name."
+  description = "Java host groups to monitor, identified by the CloudWatch Agent dimension named by cwagent_dimension_key (see cwagent/ec2-java/). One entry may cover several instances — ASG fleet members, or interchangeable standalone hosts sharing an identity — because alarms fan out per InstanceId at evaluation time. `name` is a label for alarm naming and output keys only; it is NOT a Name-tag lookup. This module is CWAgent-only, so there is no tag value here; an ASG fleet entry pairs with this one by carrying the same cwagent_dimension_value. One entry covers one JVM per host: cwagent_dimension_value is validated unique across entries, so a host running a second JVM cannot be given an entry of its own, and process_group narrows an existing entry's queries rather than permitting an additional entry under the same identity."
   type = list(object({
-    name           = string
-    app_name       = string
-    heap_max_bytes = optional(number)
-    process_group  = optional(string)
-    enabled        = optional(bool, true)
+    name                    = string
+    cwagent_dimension_value = string
+    heap_max_bytes          = optional(number)
+    process_group           = optional(string)
+    enabled                 = optional(bool, true)
     overrides = optional(object({
       severity                = optional(string)
       description             = optional(string)
@@ -65,14 +65,14 @@ variable "resources" {
     ])
     error_message = "overrides.disabled_alarms entries must be a subset of: heap_used, gc_time"
   }
-  # try(...,"") makes null fail: app_name is the identity and cannot be inferred.
+  # try(...,"") makes null fail: this is the identity and cannot be inferred.
   validation {
-    condition     = alltrue([for r in var.resources : try(trimspace(r.app_name), "") != ""])
-    error_message = "app_name must be a non-empty string — the CWAgent AppName dimension value that identifies this host group."
+    condition     = alltrue([for r in var.resources : try(trimspace(r.cwagent_dimension_value), "") != ""])
+    error_message = "cwagent_dimension_value must be a non-empty string — the CWAgent dimension value that identifies this host group."
   }
   validation {
-    condition     = length([for r in var.resources : r.app_name]) == length(distinct([for r in var.resources : r.app_name]))
-    error_message = "app_name values must be unique across entries (one AppName = one host group)."
+    condition     = length([for r in var.resources : r.cwagent_dimension_value]) == length(distinct([for r in var.resources : r.cwagent_dimension_value]))
+    error_message = "cwagent_dimension_value must be unique across entries (one identity = one host group)."
   }
   # try(...,"-") makes null pass: process_group is optional.
   validation {

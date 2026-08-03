@@ -25,7 +25,7 @@ Two ways to use it:
 ### Import the static JSON (console)
 `dashboards/jmx-jvm.json` is a snapshot for a single host group — the
 `billing-batch-java` entry of `stacks/projects/billing/dev/terraform.tfvars.example`,
-i.e. `name = "billing-batch-java"` (widget titles) and `app_name = "billing-batch"`
+i.e. `name = "billing-batch-java"` (widget titles) and `cwagent_dimension_value = "billing-batch"`
 (`AppName` in every query). To reuse it for a different group, substitute that
 `AppName` value in every query's `expression`, the label in the `title` fields, and
 the `region` fields, then create the dashboard:

@@ -95,11 +95,15 @@ variable "ec2_resources" {
 }
 
 variable "asg_resources" {
-  description = "ASG resources to monitor. Set app_name for fleet mode (AppName-scoped Metrics Insights alarms; see docs/superpowers/specs/2026-07-24-asg-fleet-alarms-design.md)."
+  description = "ASG resources to monitor. Set asg_tag_value + cwagent_dimension_value for fleet mode (identity-scoped Metrics Insights alarms); omit both for legacy mode. See docs/superpowers/specs/2026-07-24-asg-fleet-alarms-design.md."
   type = list(object({
     name             = string
     desired_capacity = number
-    app_name         = optional(string)
+    # Fleet mode: both or neither (the module validates the pairing). Normally
+    # the same string — they are separate because they are set in separate
+    # systems, the resource tag and the agent config.
+    asg_tag_value           = optional(string)
+    cwagent_dimension_value = optional(string)
     overrides = optional(object({
       severity           = optional(string)
       description        = optional(string)
@@ -116,8 +120,9 @@ variable "asg_resources" {
 # ─── Fleet identity: two mechanisms, one value ────────────────────────────────
 #
 # Both name WHERE-clause keys, both default to "AppName", and they are NOT the
-# same thing. The identity VALUE is per-entry (app_name); only the keys live
-# here. See "Identity carriers" in CLAUDE.md.
+# same thing. The VALUES are per-entry (asg_tag_value / cwagent_dimension_value
+# on each resource); only the keys live here. See "Identity carriers" in
+# CLAUDE.md.
 #
 #   asg_tag_key            AWS resource tag on the ASG and on each instance.
 #                          Only the asg module, only capacity + cpu. Needs the
@@ -307,11 +312,11 @@ variable "efs_resources" {
 variable "jmx_resources" {
   description = "Java host groups to monitor, identified by the CWAgent AppName dimension (see cwagent/ec2-java/). One entry covers every instance sharing that AppName — an ASG fleet or interchangeable standalone hosts. `name` is a label only, NOT a Name-tag lookup."
   type = list(object({
-    name           = string
-    app_name       = string
-    heap_max_bytes = optional(number)
-    process_group  = optional(string)
-    enabled        = optional(bool, true)
+    name                    = string
+    cwagent_dimension_value = string
+    heap_max_bytes          = optional(number)
+    process_group           = optional(string)
+    enabled                 = optional(bool, true)
     overrides = optional(object({
       severity                = optional(string)
       description             = optional(string)

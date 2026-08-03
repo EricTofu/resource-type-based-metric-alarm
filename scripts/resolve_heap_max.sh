@@ -214,7 +214,7 @@ chosen = int(lo)
 
 print(f"    # {label}: observed jvm_memory_heap_max across {len(series)} instance(s)")
 print(f"    - name:           {label}")
-print(f"      app_name:       {app}")
+print(f"      cwagent_dimension_value: {app}")
 if process_group:
     print(f"      process_group:  {process_group}")
 print(f"      heap_max_bytes: {chosen}     # {chosen / GIB:.2f} GiB")

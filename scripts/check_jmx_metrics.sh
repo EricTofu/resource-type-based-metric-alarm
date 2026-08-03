@@ -64,10 +64,10 @@ EOF
 )
 
 # Emits one line per jmx_resources entry, each prefixed with a type column:
-#   ENTRY<TAB>name<TAB>app_name<TAB>heap_max_bytes<TAB>check_heap<TAB>check_gc<TAB>process_group
+#   ENTRY<TAB>name<TAB>dim_value<TAB>heap_max_bytes<TAB>check_heap<TAB>check_gc<TAB>process_group
 # heap_max_bytes and process_group print "-" when unset; check_heap is 1
 # unless heap_used is in disabled_alarms, check_gc is 1 unless gc_time is.
-# Entries missing app_name or name are malformed (app_name is now the required
+# Entries missing cwagent_dimension_value or name are malformed (it is the required
 # identity; name is required for alarm-naming/output purposes) and are instead
 # emitted as:
 #   MALFORMED<TAB>message
@@ -186,25 +186,25 @@ if not entries:
 print(f"STATUS\tparsed:{len(entries)}")
 
 for e in entries:
-    # \b anchors on the whole key: unanchored 'name' also matches app_name.
+    # \b anchors on the whole key: unanchored 'name' also matches other keys.
     nm = re.search(r'\bname\s*=\s*"([^"]+)"', e)
-    ap = re.search(r'\bapp_name\s*=\s*"([^"]+)"', e)
+    ap = re.search(r'\bcwagent_dimension_value\s*=\s*"([^"]+)"', e)
     if not nm and not ap:
         # Neither identifying field present, so there is nothing to name the
         # warning after — but it is still an object inside jmx_resources, and
         # skipping it silently is how "matched but extracted nothing" used to
         # become a pass. Report it and let the caller fail the run.
-        print("MALFORMED\tan entry object has neither name nor app_name (both are required)")
+        print("MALFORMED\tan entry object has neither name nor cwagent_dimension_value (both are required)")
         continue
     if not ap:
         # Type column emitted first, hardcoded here (never interpolated from
         # tfvars content) — see the caller for why this makes the
         # ENTRY/MALFORMED discriminator collision-proof against any name a
         # user could write, including a resource literally named "MALFORMED".
-        print(f"MALFORMED\tapp_name is required; skipping entry with no app_name (name={nm.group(1)})")
+        print(f"MALFORMED\tcwagent_dimension_value is required; skipping entry without one (name={nm.group(1)})")
         continue
     if not nm:
-        print(f"MALFORMED\tname is required; skipping entry with app_name={ap.group(1)} but no name")
+        print(f"MALFORMED\tname is required; skipping entry with cwagent_dimension_value={ap.group(1)} but no name")
         continue
     hm = re.search(r'\bheap_max_bytes\s*=\s*([^,\n#}]+)', e)
     pg = re.search(r'\bprocess_group\s*=\s*"([^"]+)"', e)
@@ -231,9 +231,9 @@ RAW_ENTRIES=$(extract_jmx_entries)
 # "MALFORMED", written as a Python string literal in the code above — never
 # built from anything read out of tfvars. That makes it collision-proof
 # against user data: a resource whose `name` is literally "MALFORMED" still
-# comes out as ENTRY\tMALFORMED\t<app_name>\t..., so TYPE (the first
+# comes out as ENTRY\tMALFORMED\t<dim_value>\t..., so TYPE (the first
 # tab-separated field, split off below) is "ENTRY", not "MALFORMED", no matter
-# what the name/app_name/etc. fields contain. Do NOT go back to matching a
+# what the name/identity/etc. fields contain. Do NOT go back to matching a
 # string prefix on the whole line — that was the round-1 bug this replaced.
 MALFORMED_COUNT=0
 ENTRIES=""
@@ -262,7 +262,7 @@ ENTRIES="${ENTRIES%$'\n'}"
 # not turn into objects, or objects that yielded neither an ENTRY nor a
 # MALFORMED line — means the parser did not understand the config, and since
 # both JMX alarms are treat_missing_data=notBreaching this script is the only
-# guard between a typo'd app_name and an alarm that stays green forever. Fail
+# guard between a typo'd identity value and an alarm that stays green forever. Fail
 # loudly instead of passing silently.
 if [[ -z "$ENTRIES" && "$MALFORMED_COUNT" -eq 0 ]]; then
   case "$PARSE_STATUS" in
@@ -293,7 +293,7 @@ fi
 
 FAILED=0
 if [[ "$MALFORMED_COUNT" -gt 0 ]]; then
-  echo "ERROR: $MALFORMED_COUNT malformed jmx_resources entry/entries in $TFVARS (see WARNING lines above) — app_name and name are both required." >&2
+  echo "ERROR: $MALFORMED_COUNT malformed jmx_resources entry/entries in $TFVARS (see WARNING lines above) — cwagent_dimension_value and name are both required." >&2
   FAILED=1
 fi
 START=$(date -u -d '1 hour ago' '+%Y-%m-%dT%H:%M:%SZ')

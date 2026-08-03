@@ -88,7 +88,7 @@ resource "aws_cloudwatch_metric_alarm" "heap_used" {
     id          = "q1"
     return_data = true
     period      = 60
-    expression  = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId ORDER BY AVG() DESC"
+    expression  = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${each.value.cwagent_dimension_value}'${local.pg_filter[each.key]} GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -162,7 +162,7 @@ resource "aws_cloudwatch_metric_alarm" "gc_time" {
     id          = "q1"
     return_data = true
     period      = 60
-    expression  = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${each.value.app_name}'${local.pg_filter[each.key]} GROUP BY InstanceId ORDER BY SUM() DESC"
+    expression  = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${each.value.cwagent_dimension_value}'${local.pg_filter[each.key]} GROUP BY InstanceId ORDER BY SUM() DESC"
   }
 
   alarm_actions = each.value.enabled ? [

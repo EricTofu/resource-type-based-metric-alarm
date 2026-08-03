@@ -39,10 +39,11 @@ ses_resources         = []
 cloudfront_resources  = []
 
 # A fleet is monitored by TWO modules under one identity: asg for capacity and OS
-# metrics, jmx for the JVM. Both entries carry the same app_name, which is the
-# VALUE of two separately-maintained things: the resource tag on the instances AND
-# the ASG (asg native-metric queries), and the AppName dimension in the agent
-# config (all CWAgent queries).
+# metrics, jmx for the JVM. Each identity VALUE is named after the system that
+# resolves it: asg_tag_value is the resource tag on the instances AND the ASG,
+# cwagent_dimension_value is the dimension in the agent config. They are normally
+# the same string. The jmx entry is CWAgent-only, so it carries only the latter,
+# and it must match the asg entry's to describe the same fleet.
 #
 # The two KEYS are separate variables, both defaulting to AppName:
 #   var.asg_tag_key            the resource tag (capacity + cpu alarms)
@@ -58,19 +59,20 @@ asg_resources = [
   #   desired_capacity = 4
   # },
   #
-  # Fleet entry: app_name switches the entry to AppName-scoped Metrics Insights
+  # Fleet entry: asg_tag_value switches the entry to identity-scoped Metrics Insights
   # alarms (capacity + per-instance cpu/memory/disk), so CodeDeploy blue/green
   # churn of instance IDs and the ASG name needs no re-apply. Here `name` is only
-  # a logical label for alarm naming; app_name is the identity.
+  # a logical label for alarm naming; the two *_value fields are the identity.
   #
-  # WARNING: adding app_name to an entry that is already applied requires TWO
-  # applies (remove entry -> apply -> re-add with app_name -> apply). Both modes
+  # WARNING: latching fleet mode on an entry that is already applied requires TWO
+  # applies (remove entry -> apply -> re-add with the values -> apply). Both modes
   # render the same GroupInServiceCapacity alarm name; a single plan would
   # create and delete it concurrently. See modules/.../asg/main.tf.
   {
     name             = "billing-chat-fleet"
     desired_capacity = 3
-    app_name         = "billing-chat-live"
+    asg_tag_value           = "billing-chat-live"  # tag value on the ASG + instances
+    cwagent_dimension_value = "billing-chat-live"  # dimension value in the agent config
     overrides = {
       cpu_threshold  = 90
       disk_threshold = 80
@@ -87,18 +89,18 @@ asg_resources = [
 jmx_resources = [
   {
     name           = "billing-chat-fleet"
-    app_name       = "billing-chat-live"
+    cwagent_dimension_value = "billing-chat-live"  # same value as the asg entry above
     heap_max_bytes = 12884901888 # -Xmx12G
     process_group  = "chat-server-tomcat"
     overrides = {
       gc_time_threshold_ms = 12000 # 20% of wall clock, for a GC-heavy service
     }
   },
-  # standalone Java hosts may share one app_name; the entry then covers all of
+  # standalone Java hosts may share one identity; the entry then covers all of
   # them, alarming when ANY instance breaches (GROUP BY InstanceId)
   {
     name           = "billing-batch-java"
-    app_name       = "billing-batch"
+    cwagent_dimension_value = "billing-batch"
     heap_max_bytes = 4294967296 # -Xmx4G
     overrides = {
       heap_threshold = 80

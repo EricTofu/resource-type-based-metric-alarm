@@ -14,7 +14,7 @@
 # about it: `try(local.res.jmx, [])` in a module block that was never added
 # simply does not exist, so the key is read by nobody and the plan is clean.
 # The alarms are never created, and — worse — the library module's `validation`
-# blocks never run, so a typo'd app_name or a missing heap_max_bytes is not
+# blocks never run, so a typo'd identity value or a missing heap_max_bytes is not
 # reported either. Nothing is created, nothing is wrong, nothing is said.
 #
 # This is exactly how `jmx:` sat inert on the work leaf (2026-07-31): the leaf

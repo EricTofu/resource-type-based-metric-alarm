@@ -16,13 +16,13 @@ variable "region" {
 variable "targets" {
   description = "Java host groups to chart, identified by the CWAgent AppName dimension. Widgets use Metrics Insights grouped by InstanceId, so membership resolves at render time — no instance IDs, and fleet churn needs no apply. Pass modules/cloudwatch/metrics-alarm/jmx's dashboard_targets output."
   type = list(object({
-    name          = string
-    app_name      = string
-    process_group = optional(string)
+    name                    = string
+    cwagent_dimension_value = string
+    process_group           = optional(string)
   }))
   validation {
-    condition     = alltrue([for t in var.targets : try(trimspace(t.app_name), "") != ""])
-    error_message = "targets[*].app_name must be a non-empty CWAgent AppName dimension value."
+    condition     = alltrue([for t in var.targets : try(trimspace(t.cwagent_dimension_value), "") != ""])
+    error_message = "targets[*].cwagent_dimension_value must be a non-empty CWAgent dimension value."
   }
   validation {
     condition     = alltrue([for t in var.targets : try(trimspace(t.name), "") != ""])

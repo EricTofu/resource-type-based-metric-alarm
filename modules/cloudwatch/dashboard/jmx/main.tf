@@ -37,8 +37,8 @@ locals {
           period = 60
           yAxis  = { left = { min = 0 } }
           metrics = [
-            [{ id = "q1", label = "Heap used", expression = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
-            [{ id = "q2", label = "Heap max", expression = "SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.app_name}'${local.pg_filter[t.name]}" }]
+            [{ id = "q1", label = "Heap used", expression = "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.cwagent_dimension_value}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
+            [{ id = "q2", label = "Heap max", expression = "SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.cwagent_dimension_value}'${local.pg_filter[t.name]}" }]
           ]
         }
       },
@@ -55,8 +55,8 @@ locals {
           period = 60
           yAxis  = { left = { min = 0 } }
           metrics = [
-            [{ id = "q1", label = "GC time ms/min", expression = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
-            [{ id = "q2", label = "GC cycles/min", yAxis = "right", expression = "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
+            [{ id = "q1", label = "GC time ms/min", expression = "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.cwagent_dimension_value}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
+            [{ id = "q2", label = "GC cycles/min", yAxis = "right", expression = "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.cwagent_dimension_value}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
           ]
         }
       },
@@ -73,8 +73,8 @@ locals {
           period = 60
           yAxis  = { left = { min = 0 } }
           metrics = [
-            [{ id = "q1", label = "Threads", expression = "SELECT AVG(jvm_threads_count) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
-            [{ id = "q2", label = "Classes loaded", yAxis = "right", expression = "SELECT AVG(jvm_classes_loaded) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.app_name}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
+            [{ id = "q1", label = "Threads", expression = "SELECT AVG(jvm_threads_count) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.cwagent_dimension_value}'${local.pg_filter[t.name]} GROUP BY InstanceId" }],
+            [{ id = "q2", label = "Classes loaded", yAxis = "right", expression = "SELECT AVG(jvm_classes_loaded) FROM \"CWAgent\" WHERE ${var.cwagent_dimension_key} = '${t.cwagent_dimension_value}'${local.pg_filter[t.name]} GROUP BY InstanceId" }]
           ]
         }
       }

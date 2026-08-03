@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks fleet-mode asg_resources (entries with app_name) prerequisites by
+# Checks fleet-mode asg_resources (entries with asg_tag_value) prerequisites by
 # running the SAME Metrics Insights queries the fleet alarms use:
 #   - running EC2 instances tagged <app-tag-key>=<v> exist
 #   - tag-scoped GroupInServiceCapacity query returns data (proves the
@@ -82,7 +82,7 @@ EOF
 )
 
 # Emits one line per fleet entry, prefixed with a hardcoded type column:
-#   ENTRY<TAB>name<TAB>app_name<TAB>check_cpu<TAB>check_memory<TAB>check_disk
+#   ENTRY<TAB>name<TAB>tag_value<TAB>dim_value<TAB>check_cpu<TAB>check_memory<TAB>check_disk
 # check_* is 0 when that metric's alarm id is in overrides.disabled_alarms, so an
 # entry opting out of an alarm is not asked for its series.
 # Plus exactly one line describing how the asg_resources list itself parsed:
@@ -157,16 +157,23 @@ print(f"STATUS\tparsed:{len(entries)}")
 
 for e in entries:
     nm = re.search(r'\bname\s*=\s*"([^"]+)"', e)
-    ap = re.search(r'\bapp_name\s*=\s*"([^"]+)"', e)
-    if not nm or not ap:
-        continue  # legacy entry (no app_name) — check_asg_metrics.sh covers it
+    tv = re.search(r'\basg_tag_value\s*=\s*"([^"]+)"', e)
+    dv = re.search(r'\bcwagent_dimension_value\s*=\s*"([^"]+)"', e)
+    if not nm or not tv:
+        continue  # legacy entry (no asg_tag_value) — check_asg_metrics.sh covers it
+    # The module validates that the two are set together, so a fleet entry
+    # missing the dimension value is a config error, not a legacy entry. Report
+    # it rather than silently checking half the alarms.
+    if not dv:
+        print(f"MALFORMED\tasg_tag_value set without cwagent_dimension_value (name={nm.group(1)})")
+        continue
     da = re.search(r'disabled_alarms\s*=\s*\[([^\]]*)\]', e)
     disabled = re.findall(r'"([^"]+)"', da.group(1)) if da else []
     check_cpu = 0 if "cpu" in disabled else 1
     check_memory = 0 if "memory" in disabled else 1
     check_disk = 0 if "disk" in disabled else 1
 
-    print(f"ENTRY\t{nm.group(1)}\t{ap.group(1)}\t{check_cpu}\t{check_memory}\t{check_disk}")
+    print(f"ENTRY\t{nm.group(1)}\t{tv.group(1)}\t{dv.group(1)}\t{check_cpu}\t{check_memory}\t{check_disk}")
 EOF
 }
 
@@ -174,15 +181,26 @@ RAW_ENTRIES=$(extract_fleet_entries)
 
 ENTRIES=""
 PARSE_STATUS=""
+MALFORMED_COUNT=0
 if [[ -n "$RAW_ENTRIES" ]]; then
   while IFS=$'\t' read -r TYPE REST; do
     case "$TYPE" in
       STATUS) PARSE_STATUS="$REST" ;;
       ENTRY) ENTRIES+="$REST"$'\n' ;;
+      MALFORMED) echo "ERROR: malformed fleet entry in $TFVARS: $REST" >&2; MALFORMED_COUNT=$((MALFORMED_COUNT + 1)) ;;
     esac
   done <<< "$RAW_ENTRIES"
 fi
 ENTRIES="${ENTRIES%$'\n'}"
+
+# Checked BEFORE the empty-ENTRIES skips below, so a file whose only fleet entry
+# is malformed cannot exit 0 down the "all legacy, nothing to do" path. A fleet
+# entry with a tag value but no dimension value would otherwise have its memory
+# and disk alarms silently unchecked — both notBreaching, so green forever.
+if [[ "$MALFORMED_COUNT" -gt 0 ]]; then
+  echo "ERROR: $MALFORMED_COUNT malformed fleet entry/entries in $TFVARS (see above). asg_tag_value and cwagent_dimension_value must be set together." >&2
+  exit 1
+fi
 
 # Exiting 0 having run no checks is only legitimate when there is genuinely
 # nothing to check: no asg_resources block, a literal empty list, or a list whose
@@ -190,7 +208,7 @@ ENTRIES="${ENTRIES%$'\n'}"
 # else — a truncated/unbalanced list, or a body the entry splitter could not turn
 # into objects — means the parser did not understand the config, and every fleet
 # alarm except capacity is treat_missing_data=notBreaching, so a silent pass here
-# is how a typo'd app_name reaches production green. Fail loudly instead.
+# is how a typo'd identity value reaches production green. Fail loudly instead.
 if [[ -z "$ENTRIES" ]]; then
   case "$PARSE_STATUS" in
     absent)
@@ -202,7 +220,7 @@ if [[ -z "$ENTRIES" ]]; then
       exit 0
       ;;
     parsed:*)
-      echo "No fleet-mode asg_resources (app_name) among ${PARSE_STATUS#parsed:} asg_resources entry/entries in $TFVARS — skipping (legacy entries are checked by check_asg_metrics.sh)."
+      echo "No fleet-mode asg_resources (asg_tag_value) among ${PARSE_STATUS#parsed:} asg_resources entry/entries in $TFVARS — skipping (legacy entries are checked by check_asg_metrics.sh)."
       exit 0
       ;;
     unterminated)
@@ -333,31 +351,34 @@ check_query() {
   fi
 }
 
-while IFS=$'\t' read -r NAME APP CHECK_CPU CHECK_MEMORY CHECK_DISK; do
-  echo "--- Fleet entry '$NAME' (tag ${ASG_TAG_KEY}=$APP, dimension ${CWAGENT_DIMENSION_KEY}=$APP)"
+while IFS=$'\t' read -r NAME TAG_VALUE DIM_VALUE CHECK_CPU CHECK_MEMORY CHECK_DISK; do
+  echo "--- Fleet entry '$NAME' (tag ${ASG_TAG_KEY}=$TAG_VALUE, dimension ${CWAGENT_DIMENSION_KEY}=$DIM_VALUE)"
+  if [[ "$TAG_VALUE" != "$DIM_VALUE" ]]; then
+    echo "NOTE: [$NAME] tag value and dimension value differ. Legal, but they are normally the same string — confirm this is deliberate." >&2
+  fi
 
   COUNT=$(aws ec2 describe-instances \
     --region "$REGION" \
-    --filters "Name=tag:${ASG_TAG_KEY},Values=$APP" "Name=instance-state-name,Values=running" \
+    --filters "Name=tag:${ASG_TAG_KEY},Values=$TAG_VALUE" "Name=instance-state-name,Values=running" \
     --query "length(Reservations[].Instances[])" \
     --output text 2>/dev/null || echo "0")
   if [[ "$COUNT" == "0" || -z "$COUNT" ]]; then
-    echo "WARNING: [$NAME] no running instances tagged ${ASG_TAG_KEY}=$APP in $REGION. Check the launch template tag propagation." >&2
+    echo "WARNING: [$NAME] no running instances tagged ${ASG_TAG_KEY}=$TAG_VALUE in $REGION. Check the launch template tag propagation." >&2
     FAILED=1
   else
-    echo "OK: [$NAME] $COUNT running instance(s) tagged ${ASG_TAG_KEY}=$APP."
+    echo "OK: [$NAME] $COUNT running instance(s) tagged ${ASG_TAG_KEY}=$TAG_VALUE."
   fi
 
   # Period 60 matches the capacity alarm's metric_query period. At 300 the SUM
   # would add five per-minute datapoints and report ~5x desired_capacity.
   check_query "$NAME" "GroupInServiceCapacity (tag telemetry)" \
-    "SELECT SUM(GroupInServiceCapacity) FROM SCHEMA(\"AWS/AutoScaling\", AutoScalingGroupName) WHERE tag.${ASG_TAG_KEY} = '$APP'" \
-    "Enable CloudWatch 'resource tags on telemetry' and tag the ASG itself with ${ASG_TAG_KEY}=$APP." \
+    "SELECT SUM(GroupInServiceCapacity) FROM SCHEMA(\"AWS/AutoScaling\", AutoScalingGroupName) WHERE tag.${ASG_TAG_KEY} = '$TAG_VALUE'" \
+    "Enable CloudWatch 'resource tags on telemetry' and tag the ASG itself with ${ASG_TAG_KEY}=$TAG_VALUE." \
     60 "AWS/AutoScaling" "GroupInServiceCapacity"
 
   if [[ "$CHECK_CPU" == "1" ]]; then
     check_query "$NAME" "CPUUtilization (EC2 tag telemetry)" \
-      "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${ASG_TAG_KEY} = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
+      "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${ASG_TAG_KEY} = '$TAG_VALUE' GROUP BY InstanceId ORDER BY AVG() DESC" \
       "Enable CloudWatch 'resource tags on telemetry' for EC2 instances; if unavailable, the spec's fallback is the agent-side cpu_usage_idle metric." \
       300 "AWS/EC2" "CPUUtilization"
   fi
@@ -369,15 +390,15 @@ while IFS=$'\t' read -r NAME APP CHECK_CPU CHECK_MEMORY CHECK_DISK; do
   # the preflight fail on a config that deliberately opts out of that alarm.
   if [[ "$CHECK_MEMORY" == "1" ]]; then
     check_query "$NAME" "mem_used_percent" \
-      "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
-      "Deploy the cwagent/ec2-java/ config (AppName dimension on the mem plugin)." \
+      "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$DIM_VALUE' GROUP BY InstanceId ORDER BY AVG() DESC" \
+      "Deploy the cwagent/ec2-java/ config (${CWAGENT_DIMENSION_KEY} dimension on the mem plugin)." \
       300 "CWAgent" "mem_used_percent"
   fi
 
   if [[ "$CHECK_DISK" == "1" ]]; then
     check_query "$NAME" "disk_used_percent" \
-      "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP' AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC" \
-      "Deploy the cwagent/ec2-java/ config (AppName dimension on the disk plugin, resources ['/'])." \
+      "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$DIM_VALUE' AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC" \
+      "Deploy the cwagent/ec2-java/ config (${CWAGENT_DIMENSION_KEY} dimension on the disk plugin, resources ['/'])." \
       300 "CWAgent" "disk_used_percent"
   fi
 done <<< "$ENTRIES"

@@ -21,7 +21,8 @@ lambda_concurrency_threshold: 900     # account-level concurrency alarm threshol
 # lambda_concurrency_alarm_enabled: true
 # The fleet identity's two KEYS. Both default to AppName and are NOT the same
 # thing — see "Identity carriers" in CLAUDE.md. The identity VALUE is per-entry
-# (app_name, under resources: below); only the keys live here.
+# (asg_tag_value / cwagent_dimension_value, under resources: below); only the
+# keys live here.
 #
 #   asg_tag_key            AWS resource tag on the ASG + instances.
 #                          asg capacity and cpu alarms only.
@@ -83,10 +84,11 @@ resources:
         disabled_alarms:  [memory, disk]
 
   # A fleet is monitored by TWO modules under one identity: `asg` for capacity and
-  # OS metrics, `jmx` for the JVM. Both entries carry the same app_name, which is
-  # the VALUE of two separately-maintained things: the resource tag on the
-  # instances AND the ASG (asg native-metric queries), and the AppName dimension
-  # in the agent config (all CWAgent queries).
+  # OS metrics, `jmx` for the JVM. Each identity VALUE is named after the system
+  # that resolves it: asg_tag_value is the resource tag on the instances AND the
+  # ASG, cwagent_dimension_value is the dimension in the agent config. They are
+  # normally the same string. The jmx entry is CWAgent-only, so it carries only
+  # the latter, and it must match the asg entry's to describe the same fleet.
   #
   # The tag KEY comes from top-level asg_tag_key, the dimension name from
   # cwagent_dimension_key. See "Renaming either key" in CLAUDE.md.
@@ -100,17 +102,18 @@ resources:
       overrides:
         severity:           ERROR
         capacity_threshold: 1
-    # Fleet entry: app_name switches to AppName-scoped Metrics Insights alarms
+    # Fleet entry: asg_tag_value switches to identity-scoped Metrics Insights alarms
     # (capacity + per-instance cpu/memory/disk), so CodeDeploy blue/green churn
     # of instance IDs and the ASG name needs no re-apply. Here `name` is only a
-    # label; app_name is the identity.
-    # WARNING: adding app_name to an ALREADY-APPLIED entry needs TWO applies
-    # (remove -> apply -> re-add with app_name -> apply): both modes render the
+    # label; the two *_value fields are the identity.
+    # WARNING: latching fleet mode on an ALREADY-APPLIED entry needs TWO applies
+    # (remove -> apply -> re-add with the values -> apply): both modes render the
     # same GroupInServiceCapacity alarm name, and one plan would create and
     # delete it concurrently. See modules/cloudwatch/metrics-alarm/asg/main.tf.
     - name: billing-chat-fleet
       desired_capacity: 3
-      app_name:         billing-chat-live
+      asg_tag_value:           billing-chat-live   # tag on the ASG + instances
+      cwagent_dimension_value: billing-chat-live   # dimension in the agent config
       overrides:
         cpu_threshold:   90
         disk_threshold:  80
@@ -123,15 +126,15 @@ resources:
   # process_group scopes the queries when a host runs more than one JVM.
   jmx:
     - name: billing-chat-fleet
-      app_name:       billing-chat-live
+      cwagent_dimension_value: billing-chat-live   # same value as the asg entry
       heap_max_bytes: 12884901888        # -Xmx12G
       process_group:  chat-server-tomcat
       overrides:
         gc_time_threshold_ms: 12000      # 20% of wall clock, for a GC-heavy service
-    # standalone Java hosts may share one app_name; the entry then covers all of
+    # standalone Java hosts may share one identity; the entry then covers all of
     # them, alarming when ANY instance breaches (GROUP BY InstanceId)
     - name: billing-batch-java
-      app_name:       billing-batch
+      cwagent_dimension_value: billing-batch
       heap_max_bytes: 4294967296         # -Xmx4G
       overrides:
         heap_threshold: 80

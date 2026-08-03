@@ -201,15 +201,16 @@ The **JVM** identity is neither of them: that is the `ProcessGroupName`
 dimension (`process_group`), which is why one fleet identity can cover many JVM
 hosts.
 
-The resource tag, the agent-config dimension value, and the stack's `app_name`
-are kept in sync **by hand**. Drift fails silently green for every alarm except
+The tag on the resources, the dimension value in the agent config, and the
+`asg_tag_value` / `cwagent_dimension_value` in the stack are kept in sync **by
+hand**. Drift fails silently green for every alarm except
 capacity. That is why the preflight scripts deliberately exercise both a
 tag-scoped native query and a dimension-scoped CWAgent query.
 
 ### Renaming either key
 
-Both rename a **key** only — never the *value*, which is always the entry's
-`app_name`, and never each other. Change them at the **caller**: a module
+Both rename a **key** only — never the per-entry *values* (`asg_tag_value`,
+`cwagent_dimension_value`), and never each other. Change them at the **caller**: a module
 default is shared by every stack, and because a rename alters only
 `metric_query.expression` and not `alarm_name`, a wrong one applies in place
 with nothing to see in the plan.
@@ -288,10 +289,10 @@ Recorded here is only what the code cannot explain about itself.
 
 Requires `desired_capacity` per resource. Each entry is in one of two modes:
 
-- **Legacy** (no `app_name`) — the classic `AutoScalingGroupName`-dimension
+- **Legacy** (no `asg_tag_value`) — the classic `AutoScalingGroupName`-dimension
   capacity alarm.
-- **Fleet** (`app_name` set) — for CodeDeploy-churned ASGs whose instance IDs
-  and ASG-name suffix change on every deploy. Four `AppName`-scoped Metrics
+- **Fleet** (`asg_tag_value` set) — for CodeDeploy-churned ASGs whose instance
+  IDs and ASG-name suffix change on every deploy. Four identity-scoped Metrics
   Insights alarms: a capacity watchdog (missing data = **breaching**) and three
   per-instance guardrails grouped by `InstanceId` (missing data = not
   breaching). Membership re-resolves every evaluation, so churn needs no
@@ -299,25 +300,34 @@ Requires `desired_capacity` per resource. Each entry is in one of two modes:
 
 The OS-memory guardrail sits high on purpose: JVM hosts run hot by design, and
 heap — not OS memory — is the real signal. JVM heap and GC for fleet instances
-live in the **JMX** module, keyed by the same `app_name`.
+live in the **JMX** module, keyed by the same `cwagent_dimension_value`.
 
-Identity contract: tfvars `app_name` = the `AppName` tag on instances *and* the
-ASG = the CWAgent `AppName` dimension (`cwagent/ec2-java/`). `app_name` is
-validated non-empty, because an empty string would latch fleet mode and render
-a `WHERE tag.AppName = ''` that silently matches nothing.
+Identity contract — the entry carries the value once per system, named after the
+system that resolves it:
+
+| Field | Resolved against | Alarms |
+| --- | --- | --- |
+| `asg_tag_value` | the `<asg_tag_key>` tag on the ASG **and** each instance | capacity, cpu |
+| `cwagent_dimension_value` | the `<cwagent_dimension_key>` dimension in `cwagent/ec2-java/` | memory, disk |
+
+They are normally the same string, and a validation requires them **set together
+or both omitted** — fleet mode cannot be half-configured, because a tag value
+without a dimension value leaves memory and disk (both `notBreaching`) green
+forever. Both are validated non-empty: an empty string would latch fleet mode and
+render `WHERE tag.<key> = ''`, which silently matches nothing.
 
 > **⚠️ Flipping an existing entry between modes takes TWO applies.**
 >
 > The legacy and fleet capacity alarms render the **same alarm name** by design.
-> Adding `app_name` to an entry already in state therefore puts a create and a
+> Latching fleet mode on an entry already in state therefore puts a create and a
 > destroy of one CloudWatch alarm in a single plan, with no dependency edge
 > between them. `PutMetricAlarm` upserts by name and `DeleteAlarms` deletes by
 > name — so if the destroy lands second, it silently removes the CRIT capacity
 > watchdog that was just created, while state claims it exists.
 >
-> Procedure: remove the entry → apply → re-add it with `app_name` → apply.
-> (Or delete the legacy alarm out-of-band and `terraform state rm` it before
-> the apply that adds `app_name`.) The same applies in reverse.
+> Procedure: remove the entry → apply → re-add it with the two `*_value` fields
+> → apply. (Or delete the legacy alarm out-of-band and `terraform state rm` it
+> before the apply that latches fleet mode.) The same applies in reverse.
 >
 > A `moved` block cannot express this: it is static and would also move entries
 > that stay legacy. The three per-instance fleet alarms have no legacy
@@ -330,7 +340,7 @@ Heap and GC alarms for Java apps on EC2, identified by the CloudWatch Agent's
 `AppName` **dimension**. There is no instance lookup, so duplicate Name tags
 (normal inside an ASG) are irrelevant and blue/green churn needs no re-apply.
 One entry covers a whole fleet, or several interchangeable standalone hosts
-sharing an `app_name`.
+sharing a `cwagent_dimension_value`.
 
 - `heap_used` is thresholded in **bytes**, not percent, because CloudWatch math
   cannot divide two `GROUP BY` series arrays. `heap_max_bytes` (the JVM `-Xmx`)
@@ -349,8 +359,8 @@ sharing an `app_name`.
 Depends on `cwagent/ec2-java/`: namespace `CWAgent`, dimensions `AppName` /
 `ProcessGroupName` / `InstanceId`, snake_case `jvm_*` metric names.
 
-> **Known limitation — one `app_name` covers one JVM per host.**
-> `app_name` is validated unique across entries, so a host running two JVMs
+> **Known limitation — one identity covers one JVM per host.**
+> `cwagent_dimension_value` is validated unique across entries, so a host running two JVMs
 > cannot get one entry per `process_group`. Setting `process_group` alarms one
 > JVM and leaves the other watched by nothing at all; omitting it averages both
 > `ProcessGroupName` series against a single `heap_max_bytes`, so a large JVM
@@ -358,8 +368,9 @@ Depends on `cwagent/ec2-java/`: namespace `CWAgent`, dimensions `AppName` /
 >
 > This is exactly the silently-green class the design exists to remove,
 > accepted only because there are no multi-JVM hosts today. The fix when one
-> appears: key uniqueness on the (`app_name`, `process_group`) pair, and reject
-> two entries sharing an `app_name` where either omits `process_group`.
+> appears: key uniqueness on the (`cwagent_dimension_value`, `process_group`)
+> pair, and reject two entries sharing a `cwagent_dimension_value` where either
+> omits `process_group`.
 
 ## Dashboards
 
@@ -388,7 +399,7 @@ are directly comparable with configured capacity. They also reconcile each JMX
 entry's declared `heap_max_bytes` against the observed maximum.
 
 Three invariants hold across all the scripts. Each exists because a silent pass
-is what lets a typo'd `app_name` reach production green:
+is what lets a typo'd identity value reach production green:
 
 1. The tfvars parsers strip line comments before brace counting — a
    commented-out entry is never treated as live, and an unbalanced brace inside

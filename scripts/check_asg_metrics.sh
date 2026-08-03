@@ -2,7 +2,7 @@
 # Checks that every LEGACY ASG in asg_resources has GroupInServiceInstances metric
 # collection enabled. Exits 1 if any ASG is missing the metric.
 #
-# Fleet-mode entries (those with app_name) are SKIPPED here: their `name` is a
+# Fleet-mode entries (those with asg_tag_value) are SKIPPED here: their `name` is a
 # logical label, not an ASG name, and the real ASG name churns on every
 # CodeDeploy blue/green deploy by design. They are covered by
 # scripts/check_asg_fleet_metrics.sh, which runs the fleet alarms' own
@@ -90,9 +90,9 @@ for c in body:
 for e in entries:
     # Fleet-mode entries are handled by check_asg_fleet_metrics.sh; their name is
     # a logical label, not a live ASG name.
-    if re.search(r'\bapp_name\s*=\s*"', e):
+    if re.search(r'\basg_tag_value\s*=\s*"', e):
         continue
-    # \b anchors on the whole key: an unanchored 'name' also matches app_name,
+    # \b anchors on the whole key: an unanchored 'name' also matches other keys,
     # process_group... and would capture the wrong value.
     nm = re.search(r'\bname\s*=\s*"([^"]+)"', e)
     if not nm:

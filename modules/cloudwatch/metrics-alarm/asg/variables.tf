@@ -9,12 +9,23 @@ variable "env" {
 }
 
 variable "resources" {
-  description = "List of ASG resources to monitor. Entries with app_name set use fleet mode (AppName-scoped Metrics Insights alarms); entries without it use legacy mode (AutoScalingGroupName dimension alarm only). JVM heap/GC alarms for these instances live in modules/cloudwatch/metrics-alarm/jmx, keyed by the same app_name."
+  description = "List of ASG resources to monitor. Entries with asg_tag_value set use fleet mode (identity-scoped Metrics Insights alarms); entries without it use legacy mode (AutoScalingGroupName dimension alarm only). JVM heap/GC alarms for these instances live in modules/cloudwatch/metrics-alarm/jmx, keyed by the same cwagent_dimension_value."
   type = list(object({
     name             = string
     desired_capacity = number
-    app_name         = optional(string)
-    enabled          = optional(bool, true)
+
+    # Fleet mode carries the identity twice, once per system, because the two
+    # are resolved by different machinery and neither can see the other:
+    #   asg_tag_value           value of the <asg_tag_key> tag on the ASG and on
+    #                           each instance. Capacity + cpu alarms.
+    #   cwagent_dimension_value value of the <cwagent_dimension_key> dimension in
+    #                           the agent config. Memory + disk alarms.
+    # They are normally the same string. Setting asg_tag_value is what latches
+    # fleet mode; cwagent_dimension_value is then required (see validations).
+    asg_tag_value           = optional(string)
+    cwagent_dimension_value = optional(string)
+
+    enabled = optional(bool, true)
     overrides = optional(object({
       severity           = optional(string)
       description        = optional(string)
@@ -55,34 +66,49 @@ variable "resources" {
       for r in var.resources : alltrue([
         for m in try(r.overrides.disabled_alarms, []) :
         contains(
-          r.app_name == null
+          r.asg_tag_value == null
           ? ["in_service_capacity"]
           : ["in_service_capacity", "cpu", "memory", "disk"],
           m
         )
       ])
     ])
-    error_message = "overrides.disabled_alarms must be a subset of [in_service_capacity] for legacy entries (no app_name) or [in_service_capacity, cpu, memory, disk] for fleet entries."
+    error_message = "overrides.disabled_alarms must be a subset of [in_service_capacity] for legacy entries (no asg_tag_value) or [in_service_capacity, cpu, memory, disk] for fleet entries."
   }
   validation {
     condition = alltrue([
       for r in var.resources :
-      r.app_name != null || (
+      r.asg_tag_value != null || (
         try(r.overrides.cpu_threshold, null) == null
         && try(r.overrides.memory_threshold, null) == null
         && try(r.overrides.disk_threshold, null) == null
       )
     ])
-    error_message = "the cpu/memory/disk threshold overrides are fleet-mode fields; set app_name on the entry or remove them."
+    error_message = "the cpu/memory/disk threshold overrides are fleet-mode fields; set asg_tag_value on the entry or remove them."
   }
+
+  # Fleet mode must not be half-configured. asg_tag_value alone leaves the memory
+  # and disk queries with no identity to match; because both treat missing data
+  # as not breaching, they would sit green forever rather than complain. The
+  # reverse (dimension value without a tag value) does not latch fleet mode at
+  # all, so the entry would quietly render a legacy alarm instead.
   validation {
-    condition     = length([for r in var.resources : r.app_name if r.app_name != null]) == length(distinct([for r in var.resources : r.app_name if r.app_name != null]))
-    error_message = "app_name values must be unique across fleet entries (one AppName = one fleet)."
+    condition = alltrue([
+      for r in var.resources :
+      (r.asg_tag_value == null) == (r.cwagent_dimension_value == null)
+    ])
+    error_message = "asg_tag_value and cwagent_dimension_value must be set together (fleet mode) or both omitted (legacy mode). They are normally the same string."
   }
-  # An empty app_name would pass the null latch and render WHERE tag.AppName = '':
+
+  validation {
+    condition     = length([for r in var.resources : r.asg_tag_value if r.asg_tag_value != null]) == length(distinct([for r in var.resources : r.asg_tag_value if r.asg_tag_value != null]))
+    error_message = "asg_tag_value must be unique across fleet entries (one identity = one fleet)."
+  }
+
+  # An empty value would pass the null latch and render WHERE tag.<key> = '':
   # the capacity alarm (missing data = breaching) would page forever and the
-  # per-instance alarms (notBreaching) would sit green forever. Omit the field
-  # for legacy mode instead.
+  # per-instance alarms (notBreaching) would sit green forever. Omit the fields
+  # entirely for legacy mode instead.
   #
   # try() is the null guard on purpose: Terraform's || does not short-circuit
   # (so `x == null || trimspace(x) != ""` still errors on null), and coalesce()
@@ -90,9 +116,9 @@ variable "resources" {
   validation {
     condition = alltrue([
       for r in var.resources :
-      try(trimspace(r.app_name), "-") != ""
+      try(trimspace(r.asg_tag_value), "-") != "" && try(trimspace(r.cwagent_dimension_value), "-") != ""
     ])
-    error_message = "app_name must be a non-empty, non-whitespace string; omit the field entirely for legacy (non-fleet) entries."
+    error_message = "asg_tag_value and cwagent_dimension_value must be non-empty, non-whitespace strings; omit them entirely for legacy (non-fleet) entries."
   }
 }
 

@@ -11,7 +11,7 @@ Parameter Store copies when the contract changes.
 
 | Placeholder | Meaning | Example |
 |---|---|---|
-| `<app-name>` | Fleet identity. MUST equal the `app_name` in tfvars and the `AppName` tag on the EC2 instances/ASG. One AppName = one fleet. | `live` |
+| `<app-name>` | Fleet identity. This is the value of the dimension named by `cwagent_dimension_key`, so it MUST equal `cwagent_dimension_value` in the config (on both the `asg` and `jmx` entries). The ASG's `asg_tag_value` — the resource tag on the instances/ASG — is normally the same string but is a separate field. One identity = one fleet. | `live` |
 | `<process-group>` | Java process label within the fleet (JMX dimension `ProcessGroupName`). | `chat-server-tomcat` |
 | `<jmx-endpoint>` | JMX RMI endpoint the JVM exposes. The Java process must be started with JMX remote enabled on this port. | `localhost:9999` |
 | `<app-log-path>` / `<log-group>` | App log shipping (out of alarm scope). | — |
@@ -62,7 +62,7 @@ they cover fleet and standalone hosts alike) and `modules/cloudwatch/dashboard/j
    you no heap/GC coverage:
    - `asg_resources` fleet entry (capacity, cpu, memory, disk), or
      `ec2_resources` entry for a standalone host, **and**
-   - `jmx_resources` entry (`heap_used`, `gc_time`) with the same `app_name`, plus
+   - `jmx_resources` entry (`heap_used`, `gc_time`) with the same `cwagent_dimension_value`, plus
      `heap_max_bytes` = the JVM's `-Xmx` in bytes.
 
 Related: `cwagent/jmx/` is the older JMX-only contract. It appends no `AppName`, so
@@ -83,5 +83,5 @@ failure class the preflight checks exist to catch.
    appears in `list-metrics` immediately but returns empty values until
    datapoints accumulate. `list-metrics --recently-active PT3H` is the
    matching diagnostic.
-4. Apply the Terraform change (JMX entries gain `app_name` and
+4. Apply the Terraform change (JMX entries gain `cwagent_dimension_value` and
    `heap_max_bytes`; ASG entries drop the heap fields).

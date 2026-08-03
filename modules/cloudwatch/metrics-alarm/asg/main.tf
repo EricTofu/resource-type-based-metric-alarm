@@ -2,25 +2,27 @@ locals {
   name_prefix   = "${var.project}-${var.env}-ASG"
   asg_resources = { for res in var.resources : res.name => res }
 
-  # app_name is the fleet-mode latch: null = legacy dimension alarm only.
-  legacy_resources = { for k, v in local.asg_resources : k => v if v.app_name == null }
-  fleet_resources  = { for k, v in local.asg_resources : k => v if v.app_name != null }
+  # asg_tag_value is the fleet-mode latch: null = legacy dimension alarm only.
+  # A validation in variables.tf keeps it paired with cwagent_dimension_value,
+  # so a fleet entry always has both halves of its identity.
+  legacy_resources = { for k, v in local.asg_resources : k => v if v.asg_tag_value == null }
+  fleet_resources  = { for k, v in local.asg_resources : k => v if v.asg_tag_value != null }
 
-  # The same app_name VALUE, resolved through two unrelated systems. Built once
-  # here so the queries below read as one mechanism each, and so the difference
-  # is visible rather than buried mid-string:
+  # One key/value pair per system. Built once here so each query below reads as
+  # a single mechanism, and so the difference is visible rather than buried
+  # mid-string:
   #
   #   tag_filter       -> AWS resource tag, joined server-side by CloudWatch.
   #                       Needs "resource tags on telemetry" (account + region).
   #                       Used by the NATIVE-metric alarms (capacity, cpu).
-  #   cwagent_filter   -> a dimension the agent stamps on the metric it publishes.
+  #   cwagent_filter   -> a dimension the agent stamps on what it publishes.
   #                       Needs nothing enabled; needs the agent config to match.
   #                       Used by the CWAGENT-sourced alarms (memory, disk).
   #
   # Conflating them is the failure this layout exists to prevent: a fleet can be
   # fully tagged and still have no CWAgent series, or vice versa.
-  tag_filter     = { for k, v in local.fleet_resources : k => "tag.${var.asg_tag_key} = '${v.app_name}'" }
-  cwagent_filter = { for k, v in local.fleet_resources : k => "${var.cwagent_dimension_key} = '${v.app_name}'" }
+  tag_filter     = { for k, v in local.fleet_resources : k => "tag.${var.asg_tag_key} = '${v.asg_tag_value}'" }
+  cwagent_filter = { for k, v in local.fleet_resources : k => "${var.cwagent_dimension_key} = '${v.cwagent_dimension_value}'" }
 
   default_severities = {
     in_service_capacity = "CRIT"
@@ -34,7 +36,7 @@ locals {
 # GroupInServiceCapacity Alarm (legacy mode: AutoScalingGroupName dimension)
 #
 # NOTE: this renders the same alarm_name as fleet_in_service_capacity below.
-# Adding/removing app_name on an existing entry needs a TWO-APPLY migration —
+# Adding/removing asg_tag_value on an existing entry needs a TWO-APPLY migration —
 # see the MIGRATION FOOTGUN comment on that resource before doing it.
 #------------------------------------------------------------------------------
 
@@ -93,14 +95,15 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
 }
 
 #------------------------------------------------------------------------------
-# Fleet mode (app_name set): identity-scoped Metrics Insights alarms — capacity
+# Fleet mode (asg_tag_value set): identity-scoped Metrics Insights alarms — capacity
 # and cpu via the resource tag, memory and disk via the CWAgent dimension.
 # Membership resolves at evaluation time — ASG/instance churn needs no apply.
 # A metric_query alarm cannot carry dimensions, hence separate resources.
 #------------------------------------------------------------------------------
 
 #  ############################################################################
-#  ## MIGRATION FOOTGUN — READ BEFORE ADDING app_name TO AN EXISTING ENTRY.  ##
+#  ## MIGRATION FOOTGUN — READ BEFORE LATCHING FLEET MODE ON AN EXISTING     ##
+#  ## ENTRY (i.e. adding asg_tag_value to one already in state).              ##
 #  ############################################################################
 #
 #  This alarm and aws_cloudwatch_metric_alarm.in_service_capacity above render
@@ -109,7 +112,7 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
 #  means the same thing in both modes. But CloudWatch alarm names are the API's
 #  identity: PutMetricAlarm upserts by name, DeleteAlarms deletes by name.
 #
-#  So adding app_name to an entry that already exists in state produces, in ONE
+#  So adding asg_tag_value to an entry already in state produces, in ONE
 #  plan, a create of fleet_in_service_capacity["k"] AND a destroy of
 #  in_service_capacity["k"] — two unrelated resource addresses with no
 #  dependency edge, which Terraform is free to run concurrently. If the destroy
@@ -123,13 +126,13 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
 #  REQUIRED PROCEDURE — flip the mode over TWO applies:
 #    1. Remove the entry from the *_resources list.  ->  terraform apply
 #       (destroys the legacy alarm; confirm it is gone in CloudWatch)
-#    2. Re-add the entry with app_name.  -> terraform apply
+#    2. Re-add it with asg_tag_value + cwagent_dimension_value. -> apply
 #       (creates the fleet alarms; the name is now free)
 #  Alternative: delete the legacy alarm out-of-band (`aws cloudwatch
 #  delete-alarms --alarm-names ...` + `terraform state rm`) BEFORE the apply
-#  that adds app_name.
+#  that latches fleet mode.
 #
-#  The same collision applies in reverse (removing app_name from an entry).
+#  The same collision applies in reverse (removing asg_tag_value from an entry).
 #  The three per-instance fleet alarms are unaffected: their names have no legacy
 #  counterpart.
 #
