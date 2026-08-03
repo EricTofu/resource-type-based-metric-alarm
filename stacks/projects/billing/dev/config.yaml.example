@@ -19,6 +19,12 @@ ops_state_role_arn: arn:aws:iam::<OPS_ACCOUNT_ID>:role/tf-state-access
 # existing_sns_arns in stacks/platform/<env>/, not here.
 lambda_concurrency_threshold: 900     # account-level concurrency alarm threshold
 # lambda_concurrency_alarm_enabled: true
+# Tag KEY for the asg module's two tag-scoped queries (capacity, cpu). Not the
+# CWAgent dimension, which is always AppName. A YAML leaf must ALSO consume this
+# in main.tf (`app_tag_key = try(local.cfg.asg_app_tag_key, "AppName")`) —
+# config_guard.tf only inspects keys under `resources:`, so an unconsumed
+# top-level scalar sits here silently. See "Renaming the tag key" in CLAUDE.md.
+# asg_app_tag_key: AppName
 common_tags:
   ManagedBy:   terraform
   Environment: dev
@@ -68,9 +74,13 @@ resources:
         disabled_alarms:  [memory, disk]
 
   # A fleet is monitored by TWO modules under one identity: `asg` for capacity and
-  # OS metrics, `jmx` for the JVM. Both entries carry the same app_name, which must
-  # equal the AppName tag on the instances AND the ASG (asg native-metric queries)
-  # and the AppName dimension in the agent config (all CWAgent queries).
+  # OS metrics, `jmx` for the JVM. Both entries carry the same app_name, which is
+  # the VALUE of two separately-maintained things: the resource tag on the
+  # instances AND the ASG (asg native-metric queries), and the AppName dimension
+  # in the agent config (all CWAgent queries).
+  #
+  # The tag KEY comes from the top-level asg_app_tag_key above; the CWAgent
+  # dimension is always AppName. See "Renaming the tag key" in CLAUDE.md.
   asg:
     # desired_capacity is REQUIRED (drives the capacity threshold).
     # Legacy entries: name IS the live ASG name. valid legacy id: in_service_capacity

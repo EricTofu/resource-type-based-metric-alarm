@@ -39,9 +39,14 @@ ses_resources         = []
 cloudfront_resources  = []
 
 # A fleet is monitored by TWO modules under one identity: asg for capacity and OS
-# metrics, jmx for the JVM. Both entries carry the same app_name, which must equal
-# the AppName tag on the instances AND the ASG (asg native-metric queries) and the
-# AppName dimension in the agent config (all CWAgent queries).
+# metrics, jmx for the JVM. Both entries carry the same app_name, which is the
+# VALUE of two separately-maintained things: the resource tag on the instances AND
+# the ASG (asg native-metric queries), and the AppName dimension in the agent
+# config (all CWAgent queries).
+#
+# The tag KEY is var.asg_app_tag_key (default AppName) — see "Renaming the tag
+# key" in CLAUDE.md before changing it. The CWAgent dimension is always AppName
+# and is not affected by that variable.
 asg_resources = [
   # desired_capacity is required on every entry (it is the capacity threshold).
   #

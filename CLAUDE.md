@@ -189,10 +189,39 @@ Two independent mechanisms, easy to conflate, and conflating them fails green.
   ignores resource tags entirely.
 - The **`ec2`** module uses neither; it resolves instances by `tag:Name`.
 
+The two names default to the same string, which is convenient and misleading:
+they are set in different systems and nothing checks they agree. The **JVM**
+identity is neither of them — that is the `ProcessGroupName` dimension
+(`process_group`), which is why one `AppName` can cover a fleet of JVM hosts.
+
 The resource tag, the agent-config dimension value, and the stack's `app_name`
 are kept in sync **by hand**. Drift fails silently green for every alarm except
 capacity. That is why the preflight scripts deliberately exercise both a
 tag-scoped native query and a dimension-scoped CWAgent query.
+
+### Renaming the tag key
+
+`app_tag_key` renames the tag **key** only — never the CWAgent dimension, and
+never the tag *value* (always the entry's `app_name`). Change it at the
+**caller**, not in the module: the module default is shared by every stack, and
+because the rename alters only `metric_query.expression` and not `alarm_name`,
+a wrong one applies in place with nothing to see.
+
+Four things move together, in one commit:
+
+1. `var.asg_app_tag_key` in the stack's `variables.tf` (a YAML leaf instead adds
+   a top-level `asg_app_tag_key:` key **and** consumes it in `main.tf` —
+   `config_guard.tf` only inspects keys under `resources:`, so an unconsumed
+   scalar there is invisible).
+2. The tag on the ASG itself.
+3. The tag on its instances — `propagate_at_launch` or a launch-template tag
+   spec. Both queries need it; neither can see the other's resource.
+4. `APP_TAG_KEY` in `.github/workflows/preflight.yml`, a hand-synced mirror
+   because Terraform variables are not readable from a workflow.
+
+Miss 2 or 3 and the fleet's two tag-scoped alarms diverge on
+`treat_missing_data`: capacity (`breaching`) pages forever, CPU
+(`notBreaching`) sits green forever.
 
 ## Per-module decisions
 

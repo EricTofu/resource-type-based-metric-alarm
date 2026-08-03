@@ -40,6 +40,7 @@ module "asg_alarms" {
   resources      = var.asg_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
+  app_tag_key    = var.asg_app_tag_key
 }
 
 module "lambda_alarms" {

@@ -85,10 +85,17 @@ jobs:
         # !cancelled(): each check must run even if an earlier check FAILED —
         # a bare `if:` implies success(), which used to skip every later check.
         if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
+        # APP_TAG_KEY must match var.asg_app_tag_key in the stack being checked.
+        # Terraform variables are not readable from here, so this is a hand-synced
+        # mirror: change one, change the other in the same commit. A mismatch makes
+        # this check probe a tag the alarms do not use — it fails loudly rather
+        # than passing wrongly, but it fails on a fleet that is actually fine.
+        env:
+          APP_TAG_KEY: AppName
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
-            echo "--- Checking ASG fleet metrics: $tfvars"
-            scripts/check_asg_fleet_metrics.sh --tfvars "$tfvars" || FAILED=1
+            echo "--- Checking ASG fleet metrics: $tfvars (tag key: $APP_TAG_KEY)"
+            scripts/check_asg_fleet_metrics.sh --tfvars "$tfvars" --app-tag-key "$APP_TAG_KEY" || FAILED=1
           done
           exit $FAILED
