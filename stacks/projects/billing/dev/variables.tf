@@ -87,6 +87,7 @@ variable "ec2_resources" {
       description      = optional(string)
       cpu_threshold    = optional(number)
       memory_threshold = optional(number)
+      disk_threshold   = optional(number)
       disabled_alarms  = optional(set(string), [])
     }), {})
   }))
@@ -94,14 +95,18 @@ variable "ec2_resources" {
 }
 
 variable "asg_resources" {
-  description = "ASG resources to monitor."
+  description = "ASG resources to monitor. Set app_name for fleet mode (AppName-scoped Metrics Insights alarms; see docs/superpowers/specs/2026-07-24-asg-fleet-alarms-design.md)."
   type = list(object({
     name             = string
     desired_capacity = number
+    app_name         = optional(string)
     overrides = optional(object({
       severity           = optional(string)
       description        = optional(string)
       capacity_threshold = optional(number)
+      cpu_threshold      = optional(number)
+      memory_threshold   = optional(number)
+      disk_threshold     = optional(number)
       disabled_alarms    = optional(set(string), [])
     }), {})
   }))
@@ -228,4 +233,48 @@ variable "cloudfront_resources" {
     }), {})
   }))
   default = []
+}
+
+variable "efs_resources" {
+  description = "EFS file systems to monitor."
+  type = list(object({
+    file_system_id = string
+    name           = optional(string)
+    enabled        = optional(bool, true)
+    overrides = optional(object({
+      severity                  = optional(string)
+      description               = optional(string)
+      throughput_util_threshold = optional(number)
+      period                    = optional(number)
+      evaluation_periods        = optional(number)
+      disabled_alarms           = optional(set(string), [])
+    }), {})
+  }))
+  default = []
+}
+
+variable "jmx_resources" {
+  description = "Java host groups to monitor, identified by the CWAgent AppName dimension (see cwagent/ec2-java/). One entry covers every instance sharing that AppName — an ASG fleet or interchangeable standalone hosts. `name` is a label only, NOT a Name-tag lookup."
+  type = list(object({
+    name           = string
+    app_name       = string
+    heap_max_bytes = optional(number)
+    process_group  = optional(string)
+    enabled        = optional(bool, true)
+    overrides = optional(object({
+      severity                = optional(string)
+      description             = optional(string)
+      heap_threshold          = optional(number)
+      heap_evaluation_periods = optional(number)
+      gc_time_threshold_ms    = optional(number)
+      disabled_alarms         = optional(set(string), [])
+    }), {})
+  }))
+  default = []
+}
+
+variable "jmx_dashboard_enabled" {
+  description = "Create the per-instance JVM dashboard for the hosts in jmx_resources (requires jmx_resources to be non-empty)."
+  type        = bool
+  default     = false
 }

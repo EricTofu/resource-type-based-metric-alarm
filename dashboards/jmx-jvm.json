@@ -1,0 +1,108 @@
+{
+  "widgets": [
+    {
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [
+            {
+              "expression": "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
+              "id": "q1",
+              "label": "Heap used"
+            }
+          ],
+          [
+            {
+              "expression": "SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = 'billing-batch'",
+              "id": "q2",
+              "label": "Heap max"
+            }
+          ]
+        ],
+        "period": 60,
+        "region": "ap-northeast-1",
+        "title": "billing-batch-java — Heap (bytes)",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      },
+      "type": "metric",
+      "width": 8,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [
+            {
+              "expression": "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
+              "id": "q1",
+              "label": "GC time ms/min"
+            }
+          ],
+          [
+            {
+              "expression": "SELECT SUM(jvm_gc_collections_count) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
+              "id": "q2",
+              "label": "GC cycles/min",
+              "yAxis": "right"
+            }
+          ]
+        ],
+        "period": 60,
+        "region": "ap-northeast-1",
+        "title": "billing-batch-java — GC time (ms/min)",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      },
+      "type": "metric",
+      "width": 8,
+      "x": 8,
+      "y": 0
+    },
+    {
+      "height": 6,
+      "properties": {
+        "metrics": [
+          [
+            {
+              "expression": "SELECT AVG(jvm_threads_count) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
+              "id": "q1",
+              "label": "Threads"
+            }
+          ],
+          [
+            {
+              "expression": "SELECT AVG(jvm_classes_loaded) FROM \"CWAgent\" WHERE AppName = 'billing-batch' GROUP BY InstanceId",
+              "id": "q2",
+              "label": "Classes loaded",
+              "yAxis": "right"
+            }
+          ]
+        ],
+        "period": 60,
+        "region": "ap-northeast-1",
+        "title": "billing-batch-java — Threads & classes",
+        "view": "timeSeries",
+        "yAxis": {
+          "left": {
+            "min": 0
+          }
+        }
+      },
+      "type": "metric",
+      "width": 8,
+      "x": 16,
+      "y": 0
+    }
+  ]
+}

@@ -12,6 +12,8 @@ output "alarm_arns" {
     opensearch  = try(module.opensearch_alarms[0].alarm_arns, {})
     ses         = try(module.ses_alarms[0].alarm_arns, {})
     cloudfront  = try(module.cloudfront_alarms[0].alarm_arns, {})
+    efs         = try(module.efs_alarms[0].alarm_arns, {})
+    jmx         = try(module.jmx_alarms[0].alarm_arns, {})
   }
 }
 
@@ -29,5 +31,12 @@ output "alarm_names" {
     opensearch  = try(module.opensearch_alarms[0].alarm_names, {})
     ses         = try(module.ses_alarms[0].alarm_names, {})
     cloudfront  = try(module.cloudfront_alarms[0].alarm_names, {})
+    efs         = try(module.efs_alarms[0].alarm_names, {})
+    jmx         = try(module.jmx_alarms[0].alarm_names, {})
   }
+}
+
+output "jmx_dashboard_json" {
+  description = "Rendered JVM dashboard body (regenerate dashboards/jmx-jvm.json from this after layout changes)."
+  value       = try(module.jmx_dashboard[0].dashboard_json, null)
 }

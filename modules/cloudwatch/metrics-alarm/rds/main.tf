@@ -4,14 +4,14 @@ locals {
   standalone_resources = { for res in var.resources : res.name => res if !res.is_cluster }
 
   default_severities = {
-    freeable_memory      = "WARN"
+    freeable_memory      = "ERROR"
     cpu                  = "WARN"
     database_connections = "WARN"
-    free_storage         = "WARN"
+    free_storage         = "ERROR"
     volume_bytes_used    = "WARN"
     engine_uptime        = "CRIT"
     read_latency         = "WARN"
-    write_latency        = "WARN"
+    write_latency        = "ERROR"
     acu_utilization      = "WARN"
     serverless_capacity  = "WARN"
   }

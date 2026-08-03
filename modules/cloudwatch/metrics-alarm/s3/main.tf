@@ -10,7 +10,7 @@ locals {
 
   default_severities = {
     error_5xx          = "WARN"
-    replication_failed = "WARN"
+    replication_failed = "ERROR"
   }
 }
 

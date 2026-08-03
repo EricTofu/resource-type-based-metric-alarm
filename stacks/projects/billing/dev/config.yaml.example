@@ -61,10 +61,19 @@ resources:
       overrides:
         cpu_threshold:    90
         memory_threshold: 85
-        disabled_alarms:  [memory]      # e.g. no CWAgent on this host
+        disk_threshold:   80            # disk_used_percent at {InstanceId, path=/}
+    # both CWAgent-fed alarms off on an agentless box
+    - name: billing-legacy-host
+      overrides:
+        disabled_alarms:  [memory, disk]
 
+  # A fleet is monitored by TWO modules under one identity: `asg` for capacity and
+  # OS metrics, `jmx` for the JVM. Both entries carry the same app_name, which must
+  # equal the AppName tag on the instances AND the ASG (asg native-metric queries)
+  # and the AppName dimension in the agent config (all CWAgent queries).
   asg:
-    # desired_capacity is REQUIRED (drives the capacity threshold)
+    # desired_capacity is REQUIRED (drives the capacity threshold).
+    # Legacy entries: name IS the live ASG name. valid legacy id: in_service_capacity
     - name: billing-web-asg
       desired_capacity: 4
     - name: billing-worker-asg
@@ -72,6 +81,41 @@ resources:
       overrides:
         severity:           ERROR
         capacity_threshold: 1
+    # Fleet entry: app_name switches to AppName-scoped Metrics Insights alarms
+    # (capacity + per-instance cpu/memory/disk), so CodeDeploy blue/green churn
+    # of instance IDs and the ASG name needs no re-apply. Here `name` is only a
+    # label; app_name is the identity.
+    # WARNING: adding app_name to an ALREADY-APPLIED entry needs TWO applies
+    # (remove -> apply -> re-add with app_name -> apply): both modes render the
+    # same GroupInServiceCapacity alarm name, and one plan would create and
+    # delete it concurrently. See modules/cloudwatch/metrics-alarm/asg/main.tf.
+    - name: billing-chat-fleet
+      desired_capacity: 3
+      app_name:         billing-chat-live
+      overrides:
+        cpu_threshold:   90
+        disk_threshold:  80
+        # valid fleet ids: in_service_capacity, cpu, memory, disk
+        disabled_alarms: [memory]
+
+  # valid jmx ids: heap_used, gc_time. heap_max_bytes = JVM -Xmx in bytes,
+  # required unless heap_used is disabled (the alarm is a byte threshold);
+  # scripts/resolve_heap_max.sh emits it from live telemetry.
+  # process_group scopes the queries when a host runs more than one JVM.
+  jmx:
+    - name: billing-chat-fleet
+      app_name:       billing-chat-live
+      heap_max_bytes: 12884901888        # -Xmx12G
+      process_group:  chat-server-tomcat
+      overrides:
+        gc_time_threshold_ms: 12000      # 20% of wall clock, for a GC-heavy service
+    # standalone Java hosts may share one app_name; the entry then covers all of
+    # them, alarming when ANY instance breaches (GROUP BY InstanceId)
+    - name: billing-batch-java
+      app_name:       billing-batch
+      heap_max_bytes: 4294967296         # -Xmx4G
+      overrides:
+        heap_threshold: 80
 
   lambda:
     # timeout_ms is REQUIRED (drives the duration threshold)
@@ -119,6 +163,20 @@ resources:
       overrides:
         cpu_threshold:    75
         memory_threshold: 80
+
+  # EFS throughput-utilization trend (metric-math alarm, default 6h-sustained >=80%).
+  # Identify by file_system_id (fs-xxxx); optional name is for alarm naming only.
+  efs:
+    - file_system_id: fs-0123456789abcdef0
+      name: billing-shared-efs
+    # widen the window and tighten the threshold for a busier file system
+    - file_system_id: fs-0fedcba9876543210
+      name: billing-reports-efs
+      overrides:
+        throughput_util_threshold: 70
+        period:             3600
+        evaluation_periods: 12      # 12h sustained
+        severity:           ERROR
 
   opensearch:
     - name: billing-search

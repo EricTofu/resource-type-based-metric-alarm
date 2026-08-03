@@ -4,7 +4,8 @@ output "alarm_arns" {
     { for k, v in aws_cloudwatch_metric_alarm.status_check : "${k}:StatusCheckFailed" => v.arn },
     { for k, v in aws_cloudwatch_metric_alarm.status_check_ebs : "${k}:StatusCheckFailed_AttachedEBS" => v.arn },
     { for k, v in aws_cloudwatch_metric_alarm.cpu : "${k}:CPUUtilization" => v.arn },
-    { for k, v in aws_cloudwatch_metric_alarm.memory : "${k}:mem_used_percent" => v.arn }
+    { for k, v in aws_cloudwatch_metric_alarm.memory : "${k}:mem_used_percent" => v.arn },
+    { for k, v in aws_cloudwatch_metric_alarm.disk : "${k}:disk_used_percent" => v.arn }
   )
 }
 
@@ -14,6 +15,7 @@ output "alarm_names" {
     { for k, v in aws_cloudwatch_metric_alarm.status_check : "${k}:StatusCheckFailed" => v.alarm_name },
     { for k, v in aws_cloudwatch_metric_alarm.status_check_ebs : "${k}:StatusCheckFailed_AttachedEBS" => v.alarm_name },
     { for k, v in aws_cloudwatch_metric_alarm.cpu : "${k}:CPUUtilization" => v.alarm_name },
-    { for k, v in aws_cloudwatch_metric_alarm.memory : "${k}:mem_used_percent" => v.alarm_name }
+    { for k, v in aws_cloudwatch_metric_alarm.memory : "${k}:mem_used_percent" => v.alarm_name },
+    { for k, v in aws_cloudwatch_metric_alarm.disk : "${k}:disk_used_percent" => v.alarm_name }
   )
 }

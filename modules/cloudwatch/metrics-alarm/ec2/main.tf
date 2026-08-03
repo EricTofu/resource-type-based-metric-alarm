@@ -7,6 +7,7 @@ locals {
     status_check_ebs = "CRIT"
     cpu              = "WARN"
     memory           = "WARN"
+    disk             = "WARN"
   }
 }
 
@@ -262,6 +263,67 @@ resource "aws_cloudwatch_metric_alarm" "memory" {
     var.sns_topic_arns[coalesce(
       try(each.value.overrides.severity, null),
       local.default_severities.memory
+    )]
+  ] : []
+
+  treat_missing_data = "notBreaching"
+
+  tags = merge(
+    var.common_tags,
+    {
+      Project      = var.project
+      ResourceType = "EC2"
+      ResourceName = each.value.name
+    }
+  )
+}
+
+#------------------------------------------------------------------------------
+# disk_used_percent Alarm (CloudWatch Agent metric)
+#------------------------------------------------------------------------------
+
+resource "aws_cloudwatch_metric_alarm" "disk" {
+  for_each = {
+    for k, v in local.ec2_resources : k => v
+    if !contains(try(v.overrides.disabled_alarms, []), "disk")
+  }
+
+  alarm_name = "${local.name_prefix}-[${each.value.name}]-disk_used_percent"
+  alarm_description = "[${coalesce(try(each.value.overrides.severity, null), local.default_severities.disk)}]-${coalesce(
+    try(each.value.overrides.description, null),
+    "${local.name_prefix}-[${each.value.name}]-disk_used_percent is in ALARM state"
+  )}"
+
+  namespace           = "CWAgent"
+  metric_name         = "disk_used_percent"
+  statistic           = "Average"
+  comparison_operator = "GreaterThanThreshold"
+  threshold = coalesce(
+    try(each.value.overrides.disk_threshold, null),
+    var.default_disk_threshold
+  )
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
+  period              = 300
+
+  # Feeds on the cwagent/ec2-java [InstanceId, path] rollup: a classic alarm's
+  # dimensions must match the series exactly (raw disk series also carry fstype).
+  dimensions = {
+    InstanceId = data.aws_instance.this[each.key].id
+    path       = "/"
+  }
+
+  alarm_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.disk
+    )]
+  ] : []
+
+  ok_actions = each.value.enabled ? [
+    var.sns_topic_arns[coalesce(
+      try(each.value.overrides.severity, null),
+      local.default_severities.disk
     )]
   ] : []
 

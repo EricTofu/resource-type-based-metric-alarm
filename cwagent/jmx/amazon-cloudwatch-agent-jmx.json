@@ -1,0 +1,30 @@
+{
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": {
+      "InstanceId": "${aws:InstanceId}"
+    },
+    "aggregation_dimensions": [
+      ["InstanceId"]
+    ],
+    "metrics_collected": {
+      "jmx": [
+        {
+          "endpoint": "localhost:9999",
+          "metrics_collection_interval": 60,
+          "jvm": {
+            "measurement": [
+              { "name": "jvm.memory.heap.used",       "rename": "jvm_memory_heap_used" },
+              { "name": "jvm.memory.heap.committed",  "rename": "jvm_memory_heap_committed" },
+              { "name": "jvm.memory.heap.max",        "rename": "jvm_memory_heap_max" },
+              { "name": "jvm.gc.collections.count",   "rename": "jvm_gc_collections_count" },
+              { "name": "jvm.gc.collections.elapsed", "rename": "jvm_gc_collections_elapsed" },
+              { "name": "jvm.threads.count",          "rename": "jvm_threads_count" },
+              { "name": "jvm.classes.loaded",         "rename": "jvm_classes_loaded" }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

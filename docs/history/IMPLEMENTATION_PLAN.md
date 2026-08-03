@@ -1,3 +1,9 @@
+> **Superseded — historical record only.** A point-in-time review from 2026-04-17. It describes the root `main.tf` that was removed at M4, counts 11 modules (13 exist), and predates EFS, JMX, ASG fleet mode and the ORDER BY findings.
+>
+> Current truth: [`CLAUDE.md`](../../CLAUDE.md) and the code.
+
+---
+
 # Implementation Plan & Project Review
 
 **Project:** `resource-type-based-metric-alarm`
