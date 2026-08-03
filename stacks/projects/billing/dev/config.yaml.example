@@ -19,12 +19,21 @@ ops_state_role_arn: arn:aws:iam::<OPS_ACCOUNT_ID>:role/tf-state-access
 # existing_sns_arns in stacks/platform/<env>/, not here.
 lambda_concurrency_threshold: 900     # account-level concurrency alarm threshold
 # lambda_concurrency_alarm_enabled: true
-# Tag KEY for the asg module's two tag-scoped queries (capacity, cpu). Not the
-# CWAgent dimension, which is always AppName. A YAML leaf must ALSO consume this
-# in main.tf (`app_tag_key = try(local.cfg.asg_app_tag_key, "AppName")`) —
+# The fleet identity's two KEYS. Both default to AppName and are NOT the same
+# thing — see "Identity carriers" in CLAUDE.md. The identity VALUE is per-entry
+# (app_name, under resources: below); only the keys live here.
+#
+#   asg_tag_key            AWS resource tag on the ASG + instances.
+#                          asg capacity and cpu alarms only.
+#   cwagent_dimension_key  dimension stamped by the CloudWatch Agent.
+#                          asg memory/disk, all jmx alarms, dashboard widgets.
+#
+# A YAML leaf must ALSO consume each in main.tf, e.g.
+#   asg_tag_key = try(local.cfg.asg_tag_key, "AppName")
 # config_guard.tf only inspects keys under `resources:`, so an unconsumed
-# top-level scalar sits here silently. See "Renaming the tag key" in CLAUDE.md.
-# asg_app_tag_key: AppName
+# top-level scalar sits here silently doing nothing.
+# asg_tag_key:           AppName
+# cwagent_dimension_key: AppName
 common_tags:
   ManagedBy:   terraform
   Environment: dev
@@ -79,8 +88,8 @@ resources:
   # instances AND the ASG (asg native-metric queries), and the AppName dimension
   # in the agent config (all CWAgent queries).
   #
-  # The tag KEY comes from the top-level asg_app_tag_key above; the CWAgent
-  # dimension is always AppName. See "Renaming the tag key" in CLAUDE.md.
+  # The tag KEY comes from top-level asg_tag_key, the dimension name from
+  # cwagent_dimension_key. See "Renaming either key" in CLAUDE.md.
   asg:
     # desired_capacity is REQUIRED (drives the capacity threshold).
     # Legacy entries: name IS the live ASG name. valid legacy id: in_service_capacity

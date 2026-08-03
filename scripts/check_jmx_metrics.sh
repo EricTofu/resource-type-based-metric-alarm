@@ -23,22 +23,31 @@
 # exist" (agent config not deployed / name not renamed) from "it exists but the
 # AppName/ProcessGroupName filter matched nothing".
 #
-# Usage: check_jmx_metrics.sh --tfvars <path>
+# --cwagent-dimension-key <key> (default AppName): the CloudWatch Agent
+# *dimension* name carrying the fleet identity, mirroring the jmx module's
+# variable of the same name. It is fixed by the agent config, and it is NOT the
+# asg module's resource tag key — the two default to the same string and are set
+# in different systems.
+#
+# Usage: check_jmx_metrics.sh --tfvars <path> [--cwagent-dimension-key <key>]
 # Example: check_jmx_metrics.sh --tfvars stacks/projects/billing/dev/terraform.tfvars
 
 set -euo pipefail
 
 TFVARS=""
+# CWAgent *dimension* name (agent config), never a resource tag key.
+CWAGENT_DIMENSION_KEY="AppName"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tfvars) TFVARS="$2"; shift 2 ;;
+    --cwagent-dimension-key) CWAGENT_DIMENSION_KEY="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
 if [[ -z "$TFVARS" ]]; then
-  echo "Usage: $0 --tfvars <path>" >&2
+  echo "Usage: $0 --tfvars <path> [--cwagent-dimension-key <key>]" >&2
   exit 1
 fi
 
@@ -359,7 +368,7 @@ list_metrics_diag() {
   elif [[ "$COUNT" == "0" ]]; then
     echo "  Diagnostic: list-metrics --recently-active PT3H found 0 recently-active series for this metric in $NAMESPACE — the metric itself is absent (agent config not deployed, or the JVM metrics not renamed to snake_case), not merely mis-filtered." >&2
   else
-    echo "  Diagnostic: list-metrics --recently-active PT3H found $COUNT recently-active series for this metric in $NAMESPACE — the metric exists, so it is the WHERE filter (AppName / ProcessGroupName) that matched nothing." >&2
+    echo "  Diagnostic: list-metrics --recently-active PT3H found $COUNT recently-active series for this metric in $NAMESPACE — the metric exists, so it is the WHERE filter (${CWAGENT_DIMENSION_KEY} / ProcessGroupName) that matched nothing." >&2
   fi
 }
 
@@ -403,7 +412,7 @@ CWAGENT_HINT="Deploy the cwagent/ec2-java/ config (AppName dimension on the jmx 
 # `read` one blank line and iterate once with everything unset.
 if [[ -n "$ENTRIES" ]]; then
 while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
-  echo "--- JMX entry '$NAME' (AppName=$APP)"
+  echo "--- JMX entry '$NAME' (${CWAGENT_DIMENSION_KEY}=$APP)"
 
   PG_FILTER=""
   if [[ "$PG" != "-" ]]; then
@@ -412,18 +421,18 @@ while IFS=$'\t' read -r NAME APP HEAP_MAX CHECK_HEAP CHECK_GC PG; do
 
   if [[ "$CHECK_HEAP" == "1" ]]; then
     check_query "$NAME" "jvm_memory_heap_used" \
-      "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId ORDER BY AVG() DESC" \
+      "SELECT AVG(jvm_memory_heap_used) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP'$PG_FILTER GROUP BY InstanceId ORDER BY AVG() DESC" \
       "$CWAGENT_HINT" 60 "CWAgent" "jvm_memory_heap_used"
   fi
 
   if [[ "$CHECK_GC" == "1" ]]; then
     check_query "$NAME" "jvm_gc_collections_elapsed" \
-      "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId ORDER BY SUM() DESC" \
+      "SELECT SUM(jvm_gc_collections_elapsed) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP'$PG_FILTER GROUP BY InstanceId ORDER BY SUM() DESC" \
       "$CWAGENT_HINT" 60 "CWAgent" "jvm_gc_collections_elapsed"
   fi
 
   if [[ "$CHECK_HEAP" == "1" && "$HEAP_MAX" != "-" && "$HEAP_MAX" != "?" ]]; then
-    HEAP_MAX_QUERY="SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER"
+    HEAP_MAX_QUERY="SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP'$PG_FILTER"
     # Resolved heap_max_bytes (post ast-eval, e.g. 12 * 1024 * 1024 * 1024 ->
     # 12884901888) plus the query, echoed unconditionally so a hard CLI
     # failure still leaves both in the transcript for diagnosis.

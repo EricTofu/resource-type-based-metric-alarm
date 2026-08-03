@@ -29,3 +29,14 @@ variable "targets" {
     error_message = "targets[*].name must be a non-empty label (used in widget titles)."
   }
 }
+
+variable "cwagent_dimension_key" {
+  description = "CloudWatch Agent *dimension* name carrying the fleet identity. Must equal the append_dimensions key in the agent config (cwagent/ec2-java/). This is NOT an AWS resource tag: no account setting enables it, and a mismatch returns zero series, which renders every widget empty. The asg module's tag-scoped key is separate; see \"Identity carriers\" in CLAUDE.md."
+  type        = string
+  default     = "AppName"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_]+$", var.cwagent_dimension_key))
+    error_message = "cwagent_dimension_key must be letters, numbers or underscore only: anything else needs double-quoting inside the Metrics Insights expression, which this module does not do."
+  }
+}

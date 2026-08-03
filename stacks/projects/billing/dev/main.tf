@@ -40,7 +40,10 @@ module "asg_alarms" {
   resources      = var.asg_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
-  app_tag_key    = var.asg_app_tag_key
+
+  # Two mechanisms, one value — see the variable comments in variables.tf.
+  asg_tag_key           = var.asg_tag_key
+  cwagent_dimension_key = var.cwagent_dimension_key
 }
 
 module "lambda_alarms" {
@@ -145,6 +148,8 @@ module "jmx_alarms" {
   resources      = var.jmx_resources
   sns_topic_arns = local.sns_topic_arns
   common_tags    = var.common_tags
+
+  cwagent_dimension_key = var.cwagent_dimension_key
 }
 
 module "jmx_dashboard" {
@@ -155,4 +160,7 @@ module "jmx_dashboard" {
   env     = var.env
   region  = var.aws_region
   targets = module.jmx_alarms[0].dashboard_targets
+
+  # Same value as the alarms: the widgets query the series the alarms watch.
+  cwagent_dimension_key = var.cwagent_dimension_key
 }

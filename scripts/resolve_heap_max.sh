@@ -53,6 +53,9 @@ NAME=""
 REGION=""
 PROFILE=""
 HOURS=1
+# CWAgent *dimension* name (agent config), mirroring the jmx module variable.
+# Not the asg module's resource tag key: same default, different system.
+CWAGENT_DIMENSION_KEY="AppName"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --region)        REGION="$2"; shift 2 ;;
     --profile)       PROFILE="$2"; shift 2 ;;
     --hours)         HOURS="$2"; shift 2 ;;
+    --cwagent-dimension-key) CWAGENT_DIMENSION_KEY="$2"; shift 2 ;;
     -h|--help)       sed -n '2,45p' "$0"; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
@@ -74,7 +78,7 @@ MISSING=()
 
 if [[ ${#MISSING[@]} -gt 0 ]]; then
   echo "ERROR: missing required argument(s): ${MISSING[*]}" >&2
-  echo "Usage: $0 --app-name <AppName> --profile <profile> --region <region> [--process-group <pg>] [--name <label>] [--hours <n>]" >&2
+  echo "Usage: $0 --app-name <value> --profile <profile> --region <region> [--process-group <pg>] [--name <label>] [--hours <n>] [--cwagent-dimension-key <key>]" >&2
   exit 1
 fi
 
@@ -104,7 +108,7 @@ json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; 
 PG_FILTER=""
 [[ -z "$PROCESS_GROUP" ]] || PG_FILTER=" AND ProcessGroupName = '$PROCESS_GROUP'"
 
-QUERY="SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE AppName = '$APP'$PG_FILTER GROUP BY InstanceId"
+QUERY="SELECT MAX(jvm_memory_heap_max) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP'$PG_FILTER GROUP BY InstanceId"
 
 # Timestamps come from python, not date(1): `date -u -d '1 hour ago'` is a GNU
 # extension and BSD date (macOS) rejects -d outright ("illegal option -- d"),

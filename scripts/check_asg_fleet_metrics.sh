@@ -29,34 +29,43 @@
 # the same ~3h one Metrics Insights can see, so it separates "the metric does not
 # exist" from "it exists but the tag/AppName filter matched nothing".
 #
-# --app-tag-key <key> (default AppName): the EC2/ASG *resource tag* key used by
-# the two native-metric queries (GroupInServiceCapacity on AWS/AutoScaling,
-# CPUUtilization on AWS/EC2) and the describe-instances tag filter — this key
-# is configurable, mirroring the module's app_tag_key variable. The CWAgent
-# queries (mem_used_percent, disk_used_percent) stay hardcoded to the literal
-# AppName *dimension*, which is fixed by the agent config and is NOT the tag
-# key — do not wire --app-tag-key into those.
+# The two identity keys mirror the module variables of the same name, and are
+# deliberately separate — they are set in different systems and a single flag
+# would hide that:
 #
-# Usage: check_asg_fleet_metrics.sh --tfvars <path> [--app-tag-key <key>]
+# --asg-tag-key <key> (default AppName): the EC2/ASG *resource tag* key. Used by
+#   the two native-metric queries (GroupInServiceCapacity on AWS/AutoScaling,
+#   CPUUtilization on AWS/EC2) and by the describe-instances tag filter.
+# --cwagent-dimension-key <key> (default AppName): the CloudWatch Agent
+#   *dimension* name, fixed by the agent config. Used by the CWAgent queries
+#   (mem_used_percent, disk_used_percent) only.
+#
+# Passing one where the other belongs is the exact conflation this script exists
+# to catch, so never wire a single value into both.
+#
+# Usage: check_asg_fleet_metrics.sh --tfvars <path> [--asg-tag-key <key>]
+#                                   [--cwagent-dimension-key <key>]
 
 set -euo pipefail
 
 TFVARS=""
-# Resource *tag* key (not a metric dimension — see the header comment above
-# for why this is only wired into the native-metric queries and the
-# describe-instances filter, never into the CWAgent queries).
-APP_TAG_KEY="AppName"
+# Resource *tag* key: native-metric queries + describe-instances filter only.
+ASG_TAG_KEY="AppName"
+# CWAgent *dimension* name: the mem/disk queries only. Never interchangeable
+# with the above — see the header comment.
+CWAGENT_DIMENSION_KEY="AppName"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tfvars) TFVARS="$2"; shift 2 ;;
-    --app-tag-key) APP_TAG_KEY="$2"; shift 2 ;;
+    --asg-tag-key) ASG_TAG_KEY="$2"; shift 2 ;;
+    --cwagent-dimension-key) CWAGENT_DIMENSION_KEY="$2"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
 if [[ -z "$TFVARS" ]]; then
-  echo "Usage: $0 --tfvars <path> [--app-tag-key <key>]" >&2
+  echo "Usage: $0 --tfvars <path> [--asg-tag-key <key>] [--cwagent-dimension-key <key>]" >&2
   exit 1
 fi
 
@@ -283,7 +292,7 @@ list_metrics_diag() {
   elif [[ "$COUNT" == "0" ]]; then
     echo "  Diagnostic: list-metrics --recently-active PT3H found 0 recently-active series for $METRIC in $NAMESPACE — the metric itself is absent (no ASG group metrics collection / no CloudWatch Agent), not merely mis-filtered." >&2
   else
-    echo "  Diagnostic: list-metrics --recently-active PT3H found $COUNT recently-active series for $METRIC in $NAMESPACE — the metric exists, so it is the WHERE filter (tag.${APP_TAG_KEY} / AppName / path) that matched nothing." >&2
+    echo "  Diagnostic: list-metrics --recently-active PT3H found $COUNT recently-active series for $METRIC in $NAMESPACE — the metric exists, so it is the WHERE filter (tag.${ASG_TAG_KEY} / ${CWAGENT_DIMENSION_KEY} / path) that matched nothing." >&2
   fi
 }
 
@@ -325,49 +334,49 @@ check_query() {
 }
 
 while IFS=$'\t' read -r NAME APP CHECK_CPU CHECK_MEMORY CHECK_DISK; do
-  echo "--- Fleet entry '$NAME' (${APP_TAG_KEY}=$APP)"
+  echo "--- Fleet entry '$NAME' (tag ${ASG_TAG_KEY}=$APP, dimension ${CWAGENT_DIMENSION_KEY}=$APP)"
 
   COUNT=$(aws ec2 describe-instances \
     --region "$REGION" \
-    --filters "Name=tag:${APP_TAG_KEY},Values=$APP" "Name=instance-state-name,Values=running" \
+    --filters "Name=tag:${ASG_TAG_KEY},Values=$APP" "Name=instance-state-name,Values=running" \
     --query "length(Reservations[].Instances[])" \
     --output text 2>/dev/null || echo "0")
   if [[ "$COUNT" == "0" || -z "$COUNT" ]]; then
-    echo "WARNING: [$NAME] no running instances tagged ${APP_TAG_KEY}=$APP in $REGION. Check the launch template tag propagation." >&2
+    echo "WARNING: [$NAME] no running instances tagged ${ASG_TAG_KEY}=$APP in $REGION. Check the launch template tag propagation." >&2
     FAILED=1
   else
-    echo "OK: [$NAME] $COUNT running instance(s) tagged ${APP_TAG_KEY}=$APP."
+    echo "OK: [$NAME] $COUNT running instance(s) tagged ${ASG_TAG_KEY}=$APP."
   fi
 
   # Period 60 matches the capacity alarm's metric_query period. At 300 the SUM
   # would add five per-minute datapoints and report ~5x desired_capacity.
   check_query "$NAME" "GroupInServiceCapacity (tag telemetry)" \
-    "SELECT SUM(GroupInServiceCapacity) FROM SCHEMA(\"AWS/AutoScaling\", AutoScalingGroupName) WHERE tag.${APP_TAG_KEY} = '$APP'" \
-    "Enable CloudWatch 'resource tags on telemetry' and tag the ASG itself with ${APP_TAG_KEY}=$APP." \
+    "SELECT SUM(GroupInServiceCapacity) FROM SCHEMA(\"AWS/AutoScaling\", AutoScalingGroupName) WHERE tag.${ASG_TAG_KEY} = '$APP'" \
+    "Enable CloudWatch 'resource tags on telemetry' and tag the ASG itself with ${ASG_TAG_KEY}=$APP." \
     60 "AWS/AutoScaling" "GroupInServiceCapacity"
 
   if [[ "$CHECK_CPU" == "1" ]]; then
     check_query "$NAME" "CPUUtilization (EC2 tag telemetry)" \
-      "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${APP_TAG_KEY} = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
+      "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${ASG_TAG_KEY} = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
       "Enable CloudWatch 'resource tags on telemetry' for EC2 instances; if unavailable, the spec's fallback is the agent-side cpu_usage_idle metric." \
       300 "AWS/EC2" "CPUUtilization"
   fi
 
-  # AppName here is the CWAgent metric dimension (fixed by the agent config),
-  # not the resource tag key — do NOT swap in $APP_TAG_KEY.
+  # These use $CWAGENT_DIMENSION_KEY (the agent-config dimension), never
+  # $ASG_TAG_KEY. The two default to the same string; they are not the same key.
   # Both checks are gated on disabled_alarms: the billing/dev example ships
   # disabled_alarms = ["memory"], so demanding the series unconditionally made
   # the preflight fail on a config that deliberately opts out of that alarm.
   if [[ "$CHECK_MEMORY" == "1" ]]; then
     check_query "$NAME" "mem_used_percent" \
-      "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE AppName = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
+      "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP' GROUP BY InstanceId ORDER BY AVG() DESC" \
       "Deploy the cwagent/ec2-java/ config (AppName dimension on the mem plugin)." \
       300 "CWAgent" "mem_used_percent"
   fi
 
   if [[ "$CHECK_DISK" == "1" ]]; then
     check_query "$NAME" "disk_used_percent" \
-      "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE AppName = '$APP' AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC" \
+      "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE ${CWAGENT_DIMENSION_KEY} = '$APP' AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC" \
       "Deploy the cwagent/ec2-java/ config (AppName dimension on the disk plugin, resources ['/'])." \
       300 "CWAgent" "disk_used_percent"
   fi

@@ -70,14 +70,17 @@ jobs:
           exit $FAILED
 
       - name: Run JMX metric check
+        env:
+          CWAGENT_DIMENSION_KEY: AppName
         # !cancelled(): each check must run even if an earlier check FAILED —
         # a bare `if:` implies success(), which used to skip every later check.
         if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
-            echo "--- Checking JMX metrics: $tfvars"
-            scripts/check_jmx_metrics.sh --tfvars "$tfvars" || FAILED=1
+            echo "--- Checking JMX metrics: $tfvars (dimension: $CWAGENT_DIMENSION_KEY)"
+            scripts/check_jmx_metrics.sh --tfvars "$tfvars" \
+              --cwagent-dimension-key "$CWAGENT_DIMENSION_KEY" || FAILED=1
           done
           exit $FAILED
 
@@ -85,17 +88,22 @@ jobs:
         # !cancelled(): each check must run even if an earlier check FAILED —
         # a bare `if:` implies success(), which used to skip every later check.
         if: "!cancelled() && steps.changed.outputs.tfvars == 'true'"
-        # APP_TAG_KEY must match var.asg_app_tag_key in the stack being checked.
-        # Terraform variables are not readable from here, so this is a hand-synced
-        # mirror: change one, change the other in the same commit. A mismatch makes
-        # this check probe a tag the alarms do not use — it fails loudly rather
-        # than passing wrongly, but it fails on a fleet that is actually fine.
+        # Hand-synced mirrors of var.asg_tag_key and var.cwagent_dimension_key in
+        # the stack being checked — Terraform variables are not readable from a
+        # workflow. Change one, change the other in the same commit. A mismatch
+        # makes this check probe a key the alarms do not use: it fails loudly
+        # rather than passing wrongly, but it fails on a fleet that is fine.
+        # They are separate on purpose; a single value would hide that the tag
+        # and the agent dimension are set in different systems.
         env:
-          APP_TAG_KEY: AppName
+          ASG_TAG_KEY: AppName
+          CWAGENT_DIMENSION_KEY: AppName
         run: |
           FAILED=0
           for tfvars in ${{ steps.changed.outputs.tfvars_files }}; do
-            echo "--- Checking ASG fleet metrics: $tfvars (tag key: $APP_TAG_KEY)"
-            scripts/check_asg_fleet_metrics.sh --tfvars "$tfvars" --app-tag-key "$APP_TAG_KEY" || FAILED=1
+            echo "--- Checking ASG fleet metrics: $tfvars (tag: $ASG_TAG_KEY, dimension: $CWAGENT_DIMENSION_KEY)"
+            scripts/check_asg_fleet_metrics.sh --tfvars "$tfvars" \
+              --asg-tag-key "$ASG_TAG_KEY" \
+              --cwagent-dimension-key "$CWAGENT_DIMENSION_KEY" || FAILED=1
           done
           exit $FAILED

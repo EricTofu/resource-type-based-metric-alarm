@@ -178,50 +178,72 @@ building a module around a new query shape.
 
 Two independent mechanisms, easy to conflate, and conflating them fails green.
 
-- **`app_tag_key`** (module variable) is an **EC2/ASG resource tag key**. Used
-  by exactly two queries: the ASG module's capacity alarm (`AWS/AutoScaling`,
-  tag on the ASG) and its CPU alarm (`AWS/EC2`, tag on each instance). Requires
-  the account-level "resource tags on telemetry" setting — per account **and**
-  per region.
-- **`AppName`** is a **CWAgent dimension**: a literal string in the agent
-  config, because `append_dimensions` cannot read arbitrary tags. Every
-  CWAgent-sourced alarm — ASG memory/disk, all of JMX — matches on this and
-  ignores resource tags entirely.
-- The **`ec2`** module uses neither; it resolves instances by `tag:Name`.
+- **`asg_tag_key`** names an **EC2/ASG resource tag key**. Used by exactly two
+  queries: the ASG module's capacity alarm (`AWS/AutoScaling`, tag on the ASG)
+  and its CPU alarm (`AWS/EC2`, tag on each instance). Requires the
+  account-level "resource tags on telemetry" setting — per account **and** per
+  region.
+- **`cwagent_dimension_key`** names a **CWAgent dimension**: a literal string in
+  the agent config, because `append_dimensions` cannot read arbitrary tags.
+  Every CWAgent-sourced alarm — ASG memory/disk, all of JMX, every JVM dashboard
+  widget — matches on this and ignores resource tags entirely.
+- The **`ec2`** module uses neither. It resolves instances by `tag:Name` through
+  a data source and then alarms on plain `InstanceId` dimensions, so it is a
+  third mechanism and is unaffected by either key.
 
-The two names default to the same string, which is convenient and misleading:
-they are set in different systems and nothing checks they agree. The **JVM**
-identity is neither of them — that is the `ProcessGroupName` dimension
-(`process_group`), which is why one `AppName` can cover a fleet of JVM hosts.
+Both default to `AppName`, which is convenient and misleading: nothing checks
+they agree, because they are set in different systems. The ASG module straddles
+both — capacity and cpu through the tag, memory and disk through the dimension —
+and builds each filter once (`local.tag_filter` / `local.cwagent_filter`) so
+which mechanism a query uses is visible at a glance.
+
+The **JVM** identity is neither of them: that is the `ProcessGroupName`
+dimension (`process_group`), which is why one fleet identity can cover many JVM
+hosts.
 
 The resource tag, the agent-config dimension value, and the stack's `app_name`
 are kept in sync **by hand**. Drift fails silently green for every alarm except
 capacity. That is why the preflight scripts deliberately exercise both a
 tag-scoped native query and a dimension-scoped CWAgent query.
 
-### Renaming the tag key
+### Renaming either key
 
-`app_tag_key` renames the tag **key** only — never the CWAgent dimension, and
-never the tag *value* (always the entry's `app_name`). Change it at the
-**caller**, not in the module: the module default is shared by every stack, and
-because the rename alters only `metric_query.expression` and not `alarm_name`,
-a wrong one applies in place with nothing to see.
+Both rename a **key** only — never the *value*, which is always the entry's
+`app_name`, and never each other. Change them at the **caller**: a module
+default is shared by every stack, and because a rename alters only
+`metric_query.expression` and not `alarm_name`, a wrong one applies in place
+with nothing to see in the plan.
 
-Four things move together, in one commit:
+**`asg_tag_key`** — three things move together:
 
-1. `var.asg_app_tag_key` in the stack's `variables.tf` (a YAML leaf instead adds
-   a top-level `asg_app_tag_key:` key **and** consumes it in `main.tf` —
-   `config_guard.tf` only inspects keys under `resources:`, so an unconsumed
-   scalar there is invisible).
+1. `var.asg_tag_key` in the stack's `variables.tf`.
 2. The tag on the ASG itself.
-3. The tag on its instances — `propagate_at_launch` or a launch-template tag
-   spec. Both queries need it; neither can see the other's resource.
-4. `APP_TAG_KEY` in `.github/workflows/preflight.yml`, a hand-synced mirror
-   because Terraform variables are not readable from a workflow.
+3. The tag on its instances (`propagate_at_launch` or a launch-template tag
+   spec). Both queries need it; neither can see the other's resource.
 
-Miss 2 or 3 and the fleet's two tag-scoped alarms diverge on
-`treat_missing_data`: capacity (`breaching`) pages forever, CPU
-(`notBreaching`) sits green forever.
+**`cwagent_dimension_key`** — also three, and it reaches further because one
+stack variable feeds the `asg`, `jmx` and `dashboard/jmx` modules (they all read
+the same agent config, so separate values would be drift, not flexibility):
+
+1. `var.cwagent_dimension_key` in the stack's `variables.tf`.
+2. `append_dimensions` in `cwagent/ec2-java/`, **redeployed to every host**.
+   Terraform changes what the queries ask for, never what the agent emits.
+3. The JVM dashboard follows automatically — it takes the same variable.
+
+Either way, also update `ASG_TAG_KEY` / `CWAGENT_DIMENSION_KEY` in
+`.github/workflows/preflight.yml`: hand-synced mirrors, because Terraform
+variables are not readable from a workflow.
+
+**They fail differently, which is the reason to keep them separate.** A broken
+`asg_tag_key` splits the two tag alarms on `treat_missing_data` — capacity
+(`breaching`) pages forever while cpu (`notBreaching`) sits green. A broken
+`cwagent_dimension_key` is worse: ASG memory/disk, JMX heap/GC and every
+dashboard widget are all `notBreaching`, so nothing pages, nothing turns red,
+and only the preflight scripts notice.
+
+On a YAML leaf both are top-level `config.yaml` scalars that `main.tf` must
+consume explicitly — `config_guard.tf` only inspects keys under `resources:`, so
+an unconsumed scalar sits there silently.
 
 ## Per-module decisions
 

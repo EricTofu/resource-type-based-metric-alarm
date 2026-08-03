@@ -6,6 +6,22 @@ locals {
   legacy_resources = { for k, v in local.asg_resources : k => v if v.app_name == null }
   fleet_resources  = { for k, v in local.asg_resources : k => v if v.app_name != null }
 
+  # The same app_name VALUE, resolved through two unrelated systems. Built once
+  # here so the queries below read as one mechanism each, and so the difference
+  # is visible rather than buried mid-string:
+  #
+  #   tag_filter       -> AWS resource tag, joined server-side by CloudWatch.
+  #                       Needs "resource tags on telemetry" (account + region).
+  #                       Used by the NATIVE-metric alarms (capacity, cpu).
+  #   cwagent_filter   -> a dimension the agent stamps on the metric it publishes.
+  #                       Needs nothing enabled; needs the agent config to match.
+  #                       Used by the CWAGENT-sourced alarms (memory, disk).
+  #
+  # Conflating them is the failure this layout exists to prevent: a fleet can be
+  # fully tagged and still have no CWAgent series, or vice versa.
+  tag_filter     = { for k, v in local.fleet_resources : k => "tag.${var.asg_tag_key} = '${v.app_name}'" }
+  cwagent_filter = { for k, v in local.fleet_resources : k => "${var.cwagent_dimension_key} = '${v.app_name}'" }
+
   default_severities = {
     in_service_capacity = "CRIT"
     cpu                 = "WARN"
@@ -77,7 +93,8 @@ resource "aws_cloudwatch_metric_alarm" "in_service_capacity" {
 }
 
 #------------------------------------------------------------------------------
-# Fleet mode (app_name set): AppName-scoped Metrics Insights alarms.
+# Fleet mode (app_name set): identity-scoped Metrics Insights alarms — capacity
+# and cpu via the resource tag, memory and disk via the CWAgent dimension.
 # Membership resolves at evaluation time — ASG/instance churn needs no apply.
 # A metric_query alarm cannot carry dimensions, hence separate resources.
 #------------------------------------------------------------------------------
@@ -142,7 +159,7 @@ resource "aws_cloudwatch_metric_alarm" "fleet_in_service_capacity" {
     id          = "q1"
     return_data = true
     period      = 60
-    expression  = "SELECT SUM(GroupInServiceCapacity) FROM SCHEMA(\"AWS/AutoScaling\", AutoScalingGroupName) WHERE tag.${var.app_tag_key} = '${each.value.app_name}'"
+    expression  = "SELECT SUM(GroupInServiceCapacity) FROM SCHEMA(\"AWS/AutoScaling\", AutoScalingGroupName) WHERE ${local.tag_filter[each.key]}"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -202,7 +219,7 @@ resource "aws_cloudwatch_metric_alarm" "fleet_cpu" {
     id          = "q1"
     return_data = true
     period      = 300
-    expression  = "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE tag.${var.app_tag_key} = '${each.value.app_name}' GROUP BY InstanceId ORDER BY AVG() DESC"
+    expression  = "SELECT AVG(CPUUtilization) FROM SCHEMA(\"AWS/EC2\", InstanceId) WHERE ${local.tag_filter[each.key]} GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -258,7 +275,7 @@ resource "aws_cloudwatch_metric_alarm" "fleet_memory" {
     return_data = true
     period      = 300
     # ORDER BY required for a multi-series alarm — see the cpu alarm above.
-    expression = "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}' GROUP BY InstanceId ORDER BY AVG() DESC"
+    expression = "SELECT AVG(mem_used_percent) FROM \"CWAgent\" WHERE ${local.cwagent_filter[each.key]} GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [
@@ -312,7 +329,7 @@ resource "aws_cloudwatch_metric_alarm" "fleet_disk" {
     return_data = true
     period      = 300
     # ORDER BY required for a multi-series alarm — see the cpu alarm above.
-    expression = "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE AppName = '${each.value.app_name}' AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC"
+    expression = "SELECT AVG(disk_used_percent) FROM \"CWAgent\" WHERE ${local.cwagent_filter[each.key]} AND path = '/' GROUP BY InstanceId ORDER BY AVG() DESC"
   }
 
   alarm_actions = each.value.enabled ? [

@@ -113,25 +113,54 @@ variable "asg_resources" {
   default = []
 }
 
-# Renames only the tag KEY in the asg module's two tag-scoped queries
-# (GroupInServiceCapacity on the ASG's tag, CPUUtilization on each instance's).
-# It does NOT rename the CWAgent `AppName` dimension, which is a literal in the
-# agent config and carries ASG memory/disk plus every jmx alarm — see "Identity
-# carriers" in CLAUDE.md. The tag VALUE stays the entry's app_name either way.
+# ─── Fleet identity: two mechanisms, one value ────────────────────────────────
 #
-# Changing this needs three things in the same commit: the tag on the ASG *and*
-# on its instances (propagate_at_launch), and the --app-tag-key flag in
-# .github/workflows/preflight.yml. Miss any of them and it fails silently:
-# capacity (missing data = breaching) pages forever, cpu (notBreaching) sits
-# green forever.
-variable "asg_app_tag_key" {
-  description = "EC2/ASG resource tag key carrying the fleet identity for the asg module's tag-scoped Metrics Insights queries. The CWAgent dimension name is always AppName regardless of this value."
+# Both name WHERE-clause keys, both default to "AppName", and they are NOT the
+# same thing. The identity VALUE is per-entry (app_name); only the keys live
+# here. See "Identity carriers" in CLAUDE.md.
+#
+#   asg_tag_key            AWS resource tag on the ASG and on each instance.
+#                          Only the asg module, only capacity + cpu. Needs the
+#                          "resource tags on telemetry" setting, per account AND
+#                          per region.
+#
+#   cwagent_dimension_key  A dimension the CloudWatch Agent stamps on what it
+#                          publishes. asg memory/disk, all jmx alarms, and every
+#                          JVM dashboard widget. Fixed by the agent config in
+#                          cwagent/ec2-java/ — Terraform cannot change what the
+#                          agent emits, only what the queries ask for.
+#
+# Changing either one is a multi-system edit, and the two fail differently:
+#
+#   asg_tag_key            also retag the ASG *and* its instances
+#                          (propagate_at_launch), and update ASG_TAG_KEY in
+#                          .github/workflows/preflight.yml. Half-done, capacity
+#                          (breaching) pages forever while cpu (notBreaching)
+#                          sits green.
+#   cwagent_dimension_key  also change append_dimensions in the agent config and
+#                          redeploy it, and update CWAGENT_DIMENSION_KEY in the
+#                          same workflow. Half-done, ALL four alarms are
+#                          notBreaching — nothing pages, nothing turns red, and
+#                          only preflight notices.
+variable "asg_tag_key" {
+  description = "EC2/ASG resource tag key carrying the fleet identity. Used only by the asg module's capacity and cpu alarms."
   type        = string
   default     = "AppName"
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9_]+$", var.asg_app_tag_key))
-    error_message = "asg_app_tag_key must be letters, numbers or underscore only: anything else needs double-quoting inside the Metrics Insights expression, which the module does not do."
+    condition     = can(regex("^[A-Za-z0-9_]+$", var.asg_tag_key))
+    error_message = "asg_tag_key must be letters, numbers or underscore only: anything else needs double-quoting inside the Metrics Insights expression, which the modules do not do."
+  }
+}
+
+variable "cwagent_dimension_key" {
+  description = "CloudWatch Agent dimension name carrying the fleet identity. Feeds the asg memory/disk alarms, the jmx alarms and the JVM dashboard from one place, because all three read the same agent config."
+  type        = string
+  default     = "AppName"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_]+$", var.cwagent_dimension_key))
+    error_message = "cwagent_dimension_key must be letters, numbers or underscore only: anything else needs double-quoting inside the Metrics Insights expression, which the modules do not do."
   }
 }
 

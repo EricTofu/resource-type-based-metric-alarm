@@ -113,10 +113,31 @@ variable "sns_topic_arns" {
 
 }
 
-variable "app_tag_key" {
-  description = "EC2/ASG resource tag key that carries the fleet identity for tag-scoped Metrics Insights queries. The CWAgent dimension name is always AppName regardless of this value."
+# This module straddles BOTH identity mechanisms — see "Identity carriers" in
+# CLAUDE.md. Keep the two keys below distinct in your head: they are set in
+# different systems (AWS resource tags vs the CloudWatch Agent config) and
+# nothing checks that they agree. They default to the same string only because
+# that is the convention, not because they are the same thing.
+variable "asg_tag_key" {
+  description = "EC2/ASG resource *tag* key carrying the fleet identity. Used only by the capacity alarm (tag on the ASG) and the cpu alarm (tag on each instance). Requires the account+region 'resource tags on telemetry' setting."
   type        = string
   default     = "AppName"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_]+$", var.asg_tag_key))
+    error_message = "asg_tag_key must be letters, numbers or underscore only: anything else needs double-quoting inside the Metrics Insights expression, which this module does not do."
+  }
+}
+
+variable "cwagent_dimension_key" {
+  description = "CloudWatch Agent *dimension* name carrying the fleet identity. Used only by the memory and disk alarms. Must equal the append_dimensions key in the agent config (cwagent/ec2-java/) — a mismatch returns zero series and, because both alarms treat missing data as not breaching, they go silently green."
+  type        = string
+  default     = "AppName"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9_]+$", var.cwagent_dimension_key))
+    error_message = "cwagent_dimension_key must be letters, numbers or underscore only: anything else needs double-quoting inside the Metrics Insights expression, which this module does not do."
+  }
 }
 
 #------------------------------------------------------------------------------

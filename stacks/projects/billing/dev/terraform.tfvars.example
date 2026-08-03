@@ -44,9 +44,10 @@ cloudfront_resources  = []
 # the ASG (asg native-metric queries), and the AppName dimension in the agent
 # config (all CWAgent queries).
 #
-# The tag KEY is var.asg_app_tag_key (default AppName) — see "Renaming the tag
-# key" in CLAUDE.md before changing it. The CWAgent dimension is always AppName
-# and is not affected by that variable.
+# The two KEYS are separate variables, both defaulting to AppName:
+#   var.asg_tag_key            the resource tag (capacity + cpu alarms)
+#   var.cwagent_dimension_key  the agent dimension (memory/disk, jmx, dashboard)
+# See "Renaming either key" in CLAUDE.md before changing either.
 asg_resources = [
   # desired_capacity is required on every entry (it is the capacity threshold).
   #
