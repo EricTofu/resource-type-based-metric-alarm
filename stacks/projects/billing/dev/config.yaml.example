@@ -110,10 +110,10 @@ resources:
     # (remove -> apply -> re-add with the values -> apply): both modes render the
     # same GroupInServiceCapacity alarm name, and one plan would create and
     # delete it concurrently. See modules/cloudwatch/metrics-alarm/asg/main.tf.
-    - name: billing-chat-fleet
-      desired_capacity: 3
-      asg_tag_value:           billing-chat-live   # tag on the ASG + instances
-      cwagent_dimension_value: billing-chat-live   # dimension in the agent config
+    - name:                    billing-chat-fleet
+      desired_capacity:        3
+      asg_tag_value:           billing-chat-live   # <asg_tag_key> tag on the ASG + instances
+      cwagent_dimension_value: billing-chat-live   # <cwagent_dimension_key> dim in the agent config
       overrides:
         cpu_threshold:   90
         disk_threshold:  80
@@ -125,17 +125,17 @@ resources:
   # scripts/resolve_heap_max.sh emits it from live telemetry.
   # process_group scopes the queries when a host runs more than one JVM.
   jmx:
-    - name: billing-chat-fleet
+    - name:                    billing-chat-fleet
       cwagent_dimension_value: billing-chat-live   # same value as the asg entry
-      heap_max_bytes: 12884901888        # -Xmx12G
-      process_group:  chat-server-tomcat
+      heap_max_bytes:          12884901888         # -Xmx12G
+      process_group:           chat-server-tomcat
       overrides:
         gc_time_threshold_ms: 12000      # 20% of wall clock, for a GC-heavy service
     # standalone Java hosts may share one identity; the entry then covers all of
     # them, alarming when ANY instance breaches (GROUP BY InstanceId)
-    - name: billing-batch-java
+    - name:                    billing-batch-java
       cwagent_dimension_value: billing-batch
-      heap_max_bytes: 4294967296         # -Xmx4G
+      heap_max_bytes:          4294967296          # -Xmx4G
       overrides:
         heap_threshold: 80
 

@@ -69,10 +69,10 @@ asg_resources = [
   # render the same GroupInServiceCapacity alarm name; a single plan would
   # create and delete it concurrently. See modules/.../asg/main.tf.
   {
-    name             = "billing-chat-fleet"
-    desired_capacity = 3
-    asg_tag_value           = "billing-chat-live"  # tag value on the ASG + instances
-    cwagent_dimension_value = "billing-chat-live"  # dimension value in the agent config
+    name                    = "billing-chat-fleet"
+    desired_capacity        = 3
+    asg_tag_value           = "billing-chat-live" # the <asg_tag_key> tag on the ASG + instances
+    cwagent_dimension_value = "billing-chat-live" # the <cwagent_dimension_key> dimension in the agent config
     overrides = {
       cpu_threshold  = 90
       disk_threshold = 80
@@ -88,10 +88,10 @@ asg_resources = [
 # than one JVM. `name` is a label only.
 jmx_resources = [
   {
-    name           = "billing-chat-fleet"
-    cwagent_dimension_value = "billing-chat-live"  # same value as the asg entry above
-    heap_max_bytes = 12884901888 # -Xmx12G
-    process_group  = "chat-server-tomcat"
+    name                    = "billing-chat-fleet"
+    cwagent_dimension_value = "billing-chat-live" # same value as the asg entry above
+    heap_max_bytes          = 12884901888         # -Xmx12G
+    process_group           = "chat-server-tomcat"
     overrides = {
       gc_time_threshold_ms = 12000 # 20% of wall clock, for a GC-heavy service
     }
@@ -99,9 +99,9 @@ jmx_resources = [
   # standalone Java hosts may share one identity; the entry then covers all of
   # them, alarming when ANY instance breaches (GROUP BY InstanceId)
   {
-    name           = "billing-batch-java"
+    name                    = "billing-batch-java"
     cwagent_dimension_value = "billing-batch"
-    heap_max_bytes = 4294967296 # -Xmx4G
+    heap_max_bytes          = 4294967296 # -Xmx4G
     overrides = {
       heap_threshold = 80
     }
