@@ -31,10 +31,45 @@ lambda_concurrency_threshold: 900     # account-level concurrency alarm threshol
 #
 # A YAML leaf must ALSO consume each in main.tf, e.g.
 #   asg_tag_key = try(local.cfg.asg_tag_key, "AppName")
-# config_guard.tf only inspects keys under `resources:`, so an unconsumed
-# top-level scalar sits here silently doing nothing.
+# An unconsumed top-level key creates nothing and says nothing; the second check
+# in config_guard.tf.example is what makes that audible.
 # asg_tag_key:           AppName
 # cwagent_dimension_key: AppName
+
+# ─── What the AGENT publishes (was cwagent_configs in terraform.tfvars) ─────
+# The other side of the identity contract: `resources:` below says what to WATCH,
+# this says what the CloudWatch Agent EMITS. One SSM parameter per host group,
+# written by modules/cloudwatch/cwagent-config.
+#
+# Each entry's `template` is a file under cwagent/ NEXT TO THIS FILE, holding
+# this app's `logs` and `jmx` blocks plus any departure from the module's base
+# host metrics. Those files are committed (they are JSON templates, not *.tfvars).
+# Omit `template` for a host group that wants host metrics only — no JVM, no logs.
+#
+# cwagent_dimension_value MUST equal the asg/jmx entries watching the same fleet;
+# nothing checks it, and a mismatch leaves every CWAgent-sourced alarm green.
+# process_group is required when the overlay declares a jmx plugin.
+#
+# Consume it explicitly in main.tf — this is a top-level key, not a resources: one:
+#   configs      = try(local.cfg.cwagent_configs, [])
+#   template_dir = "${path.module}/cwagent"
+#
+# ⚠ Applying rewrites the parameter, NOT the running agents. Hosts emit the old
+#   identity until they re-fetch the config; CWAgent-sourced alarms sit
+#   notBreaching in the meantime.
+cwagent_configs:
+  - name:                    billing-chat-fleet
+    cwagent_dimension_value: billing-chat-live   # same value as the asg/jmx entries
+    template:                chat.json.tftpl     # owns logs + jmx
+    process_group:           chat-server-tomcat
+  - name:                    billing-batch-java
+    cwagent_dimension_value: billing-batch
+    template:                batch.json.tftpl
+    process_group:           batch-runner
+  # no template: host metrics only, so no process_group either
+  - name:                    billing-bastion
+    cwagent_dimension_value: billing-bastion
+
 common_tags:
   ManagedBy:   terraform
   Environment: dev

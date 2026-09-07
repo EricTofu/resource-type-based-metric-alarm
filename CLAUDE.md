@@ -248,8 +248,9 @@ dashboard widget are all `notBreaching`, so nothing pages, nothing turns red,
 and only the preflight scripts notice.
 
 On a YAML leaf both are top-level `config.yaml` scalars that `main.tf` must
-consume explicitly — `config_guard.tf` only inspects keys under `resources:`, so
-an unconsumed scalar sits there silently.
+consume explicitly. `config_guard.tf`'s first check only inspects keys under
+`resources:`; its second one covers the top level, and is the only thing that
+notices an identity key nothing reads.
 
 ## Per-module decisions
 
@@ -444,6 +445,11 @@ different strength:
   `.github/workflows/preflight.yml` — Terraform cannot read another module's
   query text.
 
+On a YAML leaf the entries are a **top-level** `cwagent_configs:` key, not a
+`resources:` type, and the overlays are committed JSON templates under
+`cwagent/` beside `config.yaml`. Wire it with `configs = try(local.cfg.cwagent_configs, [])`
+and `template_dir = "${path.module}/cwagent"`.
+
 Parameter naming is load-bearing: `CloudWatchAgentServerPolicy` grants
 `ssm:GetParameter` only under the `AmazonCloudWatch-*` prefix, which is why the
 module's default name starts there. A name outside it needs an extra statement on
@@ -521,10 +527,11 @@ and metrics it covers.
    Skipping it is silent in every direction: a `resources:` key no module block
    reads creates nothing, errors nothing, and never runs the library module's
    `validation` blocks — so a typo'd identity inside it is never reported
-   either. `config_guard.tf.example` is a drop-in `check {}` that names any
-   unconsumed key at plan time. It is the only thing that makes this class of
-   miss audible, and **its type list is hand-maintained — update it in the same
-   commit.**
+   either. `config_guard.tf.example` is a drop-in pair of `check {}` blocks that
+   name any unconsumed key at plan time — one for `resources:` types, one for
+   top-level keys such as `cwagent_configs` and the two identity keys. They are
+   the only thing that makes this class of miss audible, and **both lists are
+   hand-maintained — update them in the same commit.**
 
 ## Not currently wired
 

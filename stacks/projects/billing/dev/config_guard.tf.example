@@ -10,6 +10,11 @@
 #
 # WHAT IT CATCHES
 #
+# Two checks, same failure. First: a `resources:` key that no module block
+# consumes. Second: a TOP-LEVEL key nothing reads — the identity keys and
+# cwagent_configs live there, outside `resources:`, and were invisible to the
+# original guard.
+#
 # A `resources:` key that no module block consumes. Terraform has nothing to say
 # about it: `try(local.res.jmx, [])` in a module block that was never added
 # simply does not exist, so the key is read by nobody and the plan is clean.
@@ -53,6 +58,27 @@ locals {
     "ses",
   ]
 
+  # Every top-level config.yaml key something in this leaf reads. Same
+  # hand-maintained mirror as above, one level up: `cwagent_configs` and the two
+  # identity keys are NOT under `resources:`, so the check below is the only
+  # thing that notices when main.tf never wires one.
+  wired_top_level_keys = [
+    "asg_tag_key",
+    "aws_region",
+    "common_tags",
+    "cwagent_configs",
+    "cwagent_dimension_key",
+    "env",
+    "lambda_concurrency_alarm_enabled",
+    "lambda_concurrency_threshold",
+    "ops_bucket",
+    "ops_state_role_arn",
+    "project",
+    "resources",
+  ]
+
+  unconsumed_top_level_keys = sort(setsubtract(keys(local.cfg), local.wired_top_level_keys))
+
   # keys() on the decoded YAML map, minus the types main.tf consumes. Empty is
   # the healthy state. `local.res` is defined in config.tf as
   # try(local.cfg.resources, {}), so a leaf with no resources: block yields [].
@@ -84,6 +110,21 @@ check "config_yaml_keys_are_wired" {
       "Either add the module block (count/resources = try(local.res.<key>, []); see step 4 of ",
       "\"Adding a New Resource Type\" in CLAUDE.md), or delete the key from config.yaml. ",
       "If the block does exist, add its key to local.wired_resource_types in this file.",
+    ])
+  }
+}
+
+check "config_yaml_top_level_keys_are_wired" {
+  assert {
+    condition = length(local.unconsumed_top_level_keys) == 0
+    error_message = join("", [
+      "config.yaml declares top-level key(s) that nothing in this leaf reads: ",
+      join(", ", local.unconsumed_top_level_keys),
+      ". A top-level key is not coerced or validated by any library module, so a typo here ",
+      "is silent in both directions — cwagent_configs writes no agent config, asg_tag_key / ",
+      "cwagent_dimension_key leave the modules on their defaults while you believe you renamed them. ",
+      "Either consume it in main.tf, or delete it. If it IS consumed, add it to ",
+      "local.wired_top_level_keys in this file.",
     ])
   }
 }
