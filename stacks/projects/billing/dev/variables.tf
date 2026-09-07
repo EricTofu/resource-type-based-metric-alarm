@@ -131,9 +131,11 @@ variable "asg_resources" {
 #
 #   cwagent_dimension_key  A dimension the CloudWatch Agent stamps on what it
 #                          publishes. asg memory/disk, all jmx alarms, and every
-#                          JVM dashboard widget. Fixed by the agent config in
-#                          cwagent/ec2-java/ — Terraform cannot change what the
-#                          agent emits, only what the queries ask for.
+#                          JVM dashboard widget. Also read by cwagent_configs
+#                          below, which writes the agent config that emits it —
+#                          so one apply moves both sides, but only Parameter
+#                          Store: hosts emit the old dimension until they
+#                          re-fetch.
 #
 # Changing either one is a multi-system edit, and the two fail differently:
 #
@@ -142,11 +144,11 @@ variable "asg_resources" {
 #                          .github/workflows/preflight.yml. Half-done, capacity
 #                          (breaching) pages forever while cpu (notBreaching)
 #                          sits green.
-#   cwagent_dimension_key  also change append_dimensions in the agent config and
-#                          redeploy it, and update CWAGENT_DIMENSION_KEY in the
-#                          same workflow. Half-done, ALL four alarms are
-#                          notBreaching — nothing pages, nothing turns red, and
-#                          only preflight notices.
+#   cwagent_dimension_key  also re-fetch the config on every host (the apply
+#                          rewrites the parameter, not the running agent), and
+#                          update CWAGENT_DIMENSION_KEY in the same workflow.
+#                          Half-done, ALL four alarms are notBreaching — nothing
+#                          pages, nothing turns red, and only preflight notices.
 variable "asg_tag_key" {
   description = "EC2/ASG resource tag key carrying the fleet identity. Used only by the asg module's capacity and cpu alarms."
   type        = string
@@ -333,4 +335,29 @@ variable "jmx_dashboard_enabled" {
   description = "Create the per-instance JVM dashboard for the hosts in jmx_resources (requires jmx_resources to be non-empty)."
   type        = bool
   default     = false
+}
+
+#------------------------------------------------------------------------------
+# CloudWatch Agent configs (SSM Parameter Store).
+#
+# The emitting side of the identity contract: cwagent_dimension_key above says
+# what the alarm queries ASK FOR, these entries say what the agent PUBLISHES.
+# Both move in one apply — but the parameter only changes what a host fetches
+# NEXT, so the agents must be restarted before the queries match again.
+#------------------------------------------------------------------------------
+variable "cwagent_configs" {
+  description = "CloudWatch Agent configs to publish, one SSM parameter per host group. `cwagent_dimension_value` must match the asg/jmx entry watching the same fleet. `template` is a file under cwagent/ in this directory carrying this app's `logs` and `jmx` blocks (the module's base has neither) plus any host-metric departure from it; omit it for host metrics only. `process_group` is required when the overlay declares a jmx plugin."
+  type = list(object({
+    name                    = string
+    cwagent_dimension_value = string
+    template                = optional(string)
+    process_group           = optional(string)
+  }))
+  default = []
+}
+
+variable "cwagent_parameter_tier" {
+  description = "SSM tier for the agent-config parameters. Standard caps the value at 4096 bytes; the rendered config sits close to it."
+  type        = string
+  default     = "Standard"
 }

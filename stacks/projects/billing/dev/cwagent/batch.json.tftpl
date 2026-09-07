@@ -1,0 +1,25 @@
+{
+  "//": "billing batch hosts: a JVM, no log shipping, none of the network plugins.",
+
+  "metrics": {
+    "metrics_collected": {
+      "jmx": [
+        {
+          "endpoint": "localhost:9998",
+          "jvm": {
+            "measurement": [
+              { "name": "jvm.gc.collections.count",   "rename": "jvm_gc_collections_count" },
+              { "name": "jvm.gc.collections.elapsed", "rename": "jvm_gc_collections_elapsed" },
+              { "name": "jvm.memory.heap.max",        "rename": "jvm_memory_heap_max" },
+              { "name": "jvm.memory.heap.used",       "rename": "jvm_memory_heap_used" },
+              { "name": "jvm.threads.count",          "rename": "jvm_threads_count" }
+            ]
+          }
+        }
+      ],
+      "netstat": null,
+      "ethtool": null,
+      "diskio": null
+    }
+  }
+}

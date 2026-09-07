@@ -201,11 +201,13 @@ The **JVM** identity is neither of them: that is the `ProcessGroupName`
 dimension (`process_group`), which is why one fleet identity can cover many JVM
 hosts.
 
-The tag on the resources, the dimension value in the agent config, and the
-`asg_tag_value` / `cwagent_dimension_value` in the stack are kept in sync **by
-hand**. Drift fails silently green for every alarm except
-capacity. That is why the preflight scripts deliberately exercise both a
-tag-scoped native query and a dimension-scoped CWAgent query.
+The tag on the resources and the `asg_tag_value` / `cwagent_dimension_value` in
+the stack are kept in sync **by hand**. The dimension value in the agent config is
+the exception where a stack wires `cwagent-config` (see "Agent configs"): there
+one apply moves both the emitting and the querying side — though not the hosts.
+Drift fails silently green for every alarm except capacity. That is why the
+preflight scripts deliberately exercise both a tag-scoped native query and a
+dimension-scoped CWAgent query.
 
 ### Renaming either key
 
@@ -227,8 +229,11 @@ stack variable feeds the `asg`, `jmx` and `dashboard/jmx` modules (they all read
 the same agent config, so separate values would be drift, not flexibility):
 
 1. `var.cwagent_dimension_key` in the stack's `variables.tf`.
-2. `append_dimensions` in `cwagent/ec2-java/`, **redeployed to every host**.
-   Terraform changes what the queries ask for, never what the agent emits.
+2. `append_dimensions` in the agent config, **redeployed to every host**. On a
+   stack wiring `cwagent-config` the parameter is rewritten by the same apply, so
+   the edit is one variable — but the hosts still have to re-fetch, and until
+   they do the queries ask for a dimension nothing emits. Elsewhere the agent
+   config is changed out-of-band from `cwagent/ec2-java/`.
 3. The JVM dashboard follows automatically — it takes the same variable.
 
 Either way, also update `ASG_TAG_KEY` / `CWAGENT_DIMENSION_KEY` in
@@ -383,8 +388,67 @@ render time** and follows fleet churn with no Terraform run. Its input is
 
 `cwagent/jmx/` (dimension `InstanceId` only) is **superseded** by
 `cwagent/ec2-java/`, the full Java-host template that both the alarms and this
-dashboard depend on. Live agent configs are held in SSM Parameter Store,
-outside this repo — this repo manages alarms and dashboards, not compute.
+dashboard depend on, and the reference for what a rendered config looks like.
+Live agent configs are held in SSM Parameter Store, written by `cwagent-config`
+below. This repo still manages no compute: nothing here installs, restarts or
+runs an agent.
+
+## Agent configs
+
+`modules/cloudwatch/cwagent-config/` publishes the CloudWatch Agent config to SSM
+Parameter Store, one parameter per host group. It is the **emitting** side of the
+identity contract every other module queries: one stack variable,
+`cwagent_dimension_key`, sets both the dimension the agent stamps here and the
+dimension the alarm and dashboard queries filter on there.
+
+Each config is assembled from three pieces:
+
+| Piece | Owner | Contains |
+| --- | --- | --- |
+| `templates/base.json.tftpl` | the module | what every Linux host reports; nothing app-specific |
+| `<template_dir>/<entry.template>` | the project stack | what the app is — its `logs` and `jmx` blocks, plus any host-metric departure from the base |
+| the identity stamp | the module | the fleet dimension on every plugin, `ProcessGroupName` on `jmx` |
+
+An entry with no `template` is a valid config, not an oversight: host metrics
+only, no JVM, no log shipping.
+
+**The merge is depth-limited on purpose.** `merge()` is shallow and the agent
+document is deep, so a plain `merge(base, overlay)` replaces the whole `metrics`
+block and silently drops every base plugin. The module merges at three named
+depths — top level, `metrics`, `metrics_collected` — and stops: a plugin the
+overlay names is replaced **whole**, `"<plugin>": null` drops one, and `"//"`
+keys are the overlays' comment idiom and never reach the agent.
+
+**No template writes the identity dimensions.** The module stamps them after the
+merge, so a plugin a project replaces — or invents later — is compliant by
+construction. That makes this the one link in the identity chain that is
+mechanical rather than hand-synced.
+
+> **⚠ Terraform's write ends at Parameter Store.** Applying restarts no agent and
+> republishes no metric: hosts keep reporting under the old identity until they
+> re-fetch. In that window every CWAgent-sourced alarm (ASG memory/disk, JMX
+> heap/GC) matches nothing and sits `notBreaching` — green, not red. Changing an
+> identity is a two-phase rollout, never one apply.
+
+Because the `jmx` block lives in project files, the snake_case rename contract the
+JMX alarms query is per project now and can drift. Two guards, deliberately of
+different strength:
+
+- `process_group` missing while an overlay declares `jmx` — a **precondition**,
+  which blocks the apply. Without it there is no `ProcessGroupName` dimension for
+  the JMX alarms and dashboard widgets to filter on.
+- an overlay missing one of `required_jvm_metrics` — a **check block**, which only
+  warns, because collecting a subset of the JVM metrics is legitimate. Dropping a
+  metric an alarm queries does not error; it goes `notBreaching`. That list is a
+  hand-synced mirror of the JMX module's queries, like the key mirrors in
+  `.github/workflows/preflight.yml` — Terraform cannot read another module's
+  query text.
+
+Parameter naming is load-bearing: `CloudWatchAgentServerPolicy` grants
+`ssm:GetParameter` only under the `AmazonCloudWatch-*` prefix, which is why the
+module's default name starts there. A name outside it needs an extra statement on
+the instance profile, and its absence fails on the host, where Terraform cannot
+see it.
 
 ## Preflight checks
 

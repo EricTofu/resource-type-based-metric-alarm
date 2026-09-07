@@ -1,0 +1,83 @@
+{
+  "agent": {
+    "metrics_collection_interval": ${collection_interval},
+    "run_as_user": "root"
+  },
+  "metrics": {
+    "namespace": "CWAgent",
+    "append_dimensions": {
+      "InstanceId": "$${aws:InstanceId}"
+    },
+    "aggregation_dimensions": [
+      [
+        "InstanceId"
+      ],
+      [
+        "InstanceId",
+        "path"
+      ]
+    ],
+    "metrics_collected": {
+      "cpu": {
+        "measurement": [
+          "cpu_usage_idle",
+          "cpu_usage_iowait",
+          "cpu_usage_user",
+          "cpu_usage_system"
+        ]
+      },
+      "mem": {
+        "measurement": [
+          "mem_used_percent"
+        ]
+      },
+      "disk": {
+        "measurement": [
+          "disk_used_percent",
+          "disk_inodes_free"
+        ],
+        "resources": [
+          "/"
+        ],
+        "drop_device": true
+      },
+      "net": {
+        "measurement": [
+          "net_bytes_recv",
+          "net_bytes_sent"
+        ]
+      },
+      "diskio": {
+        "measurement": [
+          "diskio_io_time"
+        ]
+      },
+      "swap": {
+        "measurement": [
+          "swap_used_percent"
+        ]
+      },
+      "netstat": {
+        "measurement": [
+          "netstat_tcp_established",
+          "netstat_tcp_time_wait"
+        ]
+      },
+      "processes": {
+        "measurement": [
+          "processes_running",
+          "processes_total"
+        ]
+      },
+      "ethtool": {
+        "metrics_include": [
+          "bw_in_allowance_exceeded",
+          "bw_out_allowance_exceeded",
+          "conntrack_allowance_exceeded",
+          "linklocal_allowance_exceeded",
+          "pps_allowance_exceeded"
+        ]
+      }
+    }
+  }
+}

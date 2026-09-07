@@ -40,3 +40,13 @@ output "jmx_dashboard_json" {
   description = "Rendered JVM dashboard body (regenerate dashboards/jmx-jvm.json from this after layout changes)."
   value       = try(module.jmx_dashboard[0].dashboard_json, null)
 }
+
+output "cwagent_parameter_names" {
+  description = "Agent-config SSM parameter per host group — pass to `amazon-cloudwatch-agent-ctl -a fetch-config -c ssm:<name>`."
+  value       = try(module.cwagent_config[0].parameter_names, {})
+}
+
+output "cwagent_config_json" {
+  description = "Rendered agent config per host group, as stored in Parameter Store."
+  value       = try(module.cwagent_config[0].config_json, {})
+}

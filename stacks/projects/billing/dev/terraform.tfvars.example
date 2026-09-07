@@ -116,3 +116,30 @@ efs_resources = [
     overrides      = { throughput_util_threshold = 70, evaluation_periods = 12, severity = "ERROR" }
   },
 ]
+
+# CloudWatch Agent configs published to SSM Parameter Store, one per host group.
+# The module's base template covers host metrics (cpu/mem/disk/net/...); each
+# entry's `template` under cwagent/ carries this app's logs + jmx blocks.
+# cwagent_dimension_value is the identity the alarms match: keep it equal to the
+# asg/jmx entries above (and normally to the ASG's asg_tag_value too).
+# Applying this does NOT restart any agent — hosts report under the old identity
+# until they re-fetch, and CWAgent-sourced alarms sit green in the meantime.
+cwagent_configs = [
+  {
+    name                    = "billing-chat-fleet"
+    cwagent_dimension_value = "billing-chat-live" # same value as the asg/jmx entries
+    template                = "chat.json.tftpl"   # owns logs + jmx
+    process_group           = "chat-server-tomcat"
+  },
+  {
+    name                    = "billing-batch-java"
+    cwagent_dimension_value = "billing-batch"
+    template                = "batch.json.tftpl"
+    process_group           = "batch-runner"
+  },
+  # No template: host metrics only — no JVM, no log shipping, no process_group.
+  {
+    name                    = "billing-bastion"
+    cwagent_dimension_value = "billing-bastion"
+  },
+]

@@ -164,3 +164,23 @@ module "jmx_dashboard" {
   # Same value as the alarms: the widgets query the series the alarms watch.
   cwagent_dimension_key = var.cwagent_dimension_key
 }
+
+module "cwagent_config" {
+  source = "../../../../modules/cloudwatch/cwagent-config"
+  count  = length(var.cwagent_configs) > 0 ? 1 : 0
+
+  project     = var.project
+  env         = var.env
+  configs     = var.cwagent_configs
+  common_tags = var.common_tags
+  tier        = var.cwagent_parameter_tier
+
+  # Overlays live with the project, not the module: each entry's `template` is a
+  # file name under this directory. Entries cannot say path.root themselves —
+  # a .tfvars file has no access to it.
+  template_dir = "${path.root}/cwagent"
+
+  # Same variable the asg/jmx alarms and the JVM dashboard read: here it sets the
+  # dimension the agent stamps, there it sets the dimension the queries filter on.
+  cwagent_dimension_key = var.cwagent_dimension_key
+}

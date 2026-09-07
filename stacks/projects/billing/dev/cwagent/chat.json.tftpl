@@ -1,0 +1,50 @@
+{
+  "//": "billing chat fleet. The project owns `logs` and `jmx`; the module's base owns the host metrics. Available vars: project, env, name, dimension_value, process_group, collection_interval. Never write AppName/ProcessGroupName here — the module stamps identity on every plugin after the merge.",
+
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/billing/chat/application.log",
+            "log_group_name": "/${project}/${env}/chat",
+            "log_stream_name": "{instance_id}",
+            "retention_in_days": 180
+          }
+        ]
+      }
+    }
+  },
+
+  "metrics": {
+    "metrics_collected": {
+      "jmx": [
+        {
+          "endpoint": "localhost:9999",
+          "jvm": {
+            "measurement": [
+              { "name": "jvm.classes.loaded",           "rename": "jvm_classes_loaded" },
+              { "name": "jvm.gc.collections.count",     "rename": "jvm_gc_collections_count" },
+              { "name": "jvm.gc.collections.elapsed",   "rename": "jvm_gc_collections_elapsed" },
+              { "name": "jvm.memory.heap.committed",    "rename": "jvm_memory_heap_committed" },
+              { "name": "jvm.memory.heap.max",          "rename": "jvm_memory_heap_max" },
+              { "name": "jvm.memory.heap.used",         "rename": "jvm_memory_heap_used" },
+              { "name": "jvm.memory.nonheap.committed", "rename": "jvm_memory_nonheap_committed" },
+              { "name": "jvm.memory.nonheap.max",       "rename": "jvm_memory_nonheap_max" },
+              { "name": "jvm.memory.nonheap.used",      "rename": "jvm_memory_nonheap_used" },
+              { "name": "jvm.threads.count",            "rename": "jvm_threads_count" }
+            ]
+          }
+        }
+      ],
+
+      "//": "host-metric departures from the base: a plugin named here replaces the base's whole block, and null drops one.",
+      "disk": {
+        "measurement": ["disk_used_percent", "disk_inodes_free"],
+        "resources": ["/", "/data"],
+        "drop_device": true
+      },
+      "ethtool": null
+    }
+  }
+}
