@@ -407,8 +407,8 @@ Each config is assembled from three pieces:
 | Piece | Owner | Contains |
 | --- | --- | --- |
 | `templates/base.json.tftpl` | the module | what every Linux host reports; nothing app-specific |
-| `<template_dir>/<entry.template>` | the project stack | what the app is — its `logs` and `jmx` blocks, plus any host-metric departure from the base |
-| the identity stamp | the module | the fleet dimension on every plugin, `ProcessGroupName` on `jmx` |
+| `<template_dir>/<entry.template>` | the project stack | what the app is — its `logs` and `jmx` blocks, any host-metric departure from the base, and any dimension beyond the fleet one (`ProcessGroupName`) |
+| the identity stamp | the module | the fleet dimension, on every plugin |
 
 An entry with no `template` is a valid config, not an oversight: host metrics
 only, no JVM, no log shipping.
@@ -420,10 +420,19 @@ depths — top level, `metrics`, `metrics_collected` — and stops: a plugin the
 overlay names is replaced **whole**, `"<plugin>": null` drops one, and `"//"`
 keys are the overlays' comment idiom and never reach the agent.
 
-**No template writes the identity dimensions.** The module stamps them after the
-merge, so a plugin a project replaces — or invents later — is compliant by
-construction. That makes this the one link in the identity chain that is
-mechanical rather than hand-synced.
+**No template writes the fleet dimension.** The module stamps it after the merge,
+so a plugin a project replaces — or invents later — is compliant by construction.
+That makes this the one link in the identity chain that is mechanical rather than
+hand-synced.
+
+It is also the **only** dimension the module owns. `ProcessGroupName` is an
+ordinary custom dimension: the overlay writes it in its own `append_dimensions`,
+beside the `jmx` block it describes, which is the right granularity because a
+host may run several JVMs and the module's per-entry stamp could only give them
+all one value. The module neither writes it nor checks it — matching it to the
+`jmx_resources` entry's `process_group` is hand-synced, like every other value in
+the identity chain. The overlay's own keys survive the stamp; only the fleet
+dimension's key is overwritten.
 
 > **⚠ Terraform's write ends at Parameter Store.** Applying restarts no agent and
 > republishes no metric: hosts keep reporting under the old identity until they
@@ -432,12 +441,8 @@ mechanical rather than hand-synced.
 > identity is a two-phase rollout, never one apply.
 
 Because the `jmx` block lives in project files, the snake_case rename contract the
-JMX alarms query is per project now and can drift. Two guards, deliberately of
-different strength:
+JMX alarms query is per project now and can drift. One guard covers it:
 
-- `process_group` missing while an overlay declares `jmx` — a **precondition**,
-  which blocks the apply. Without it there is no `ProcessGroupName` dimension for
-  the JMX alarms and dashboard widgets to filter on.
 - an overlay missing one of `required_jvm_metrics` — a **check block**, which only
   warns, because collecting a subset of the JVM metrics is legitimate. Dropping a
   metric an alarm queries does not error; it goes `notBreaching`. That list is a

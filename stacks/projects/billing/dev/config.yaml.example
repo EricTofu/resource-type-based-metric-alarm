@@ -47,8 +47,10 @@ lambda_concurrency_threshold: 900     # account-level concurrency alarm threshol
 # Omit `template` for a host group that wants host metrics only — no JVM, no logs.
 #
 # cwagent_dimension_value MUST equal the asg/jmx entries watching the same fleet;
-# nothing checks it, and a mismatch leaves every CWAgent-sourced alarm green.
-# process_group is required when the overlay declares a jmx plugin.
+# nothing checks it, and a mismatch leaves every CWAgent-sourced alarm green. It
+# is the ONLY dimension the module writes: ProcessGroupName (and anything else the
+# app wants) goes in the overlay's own append_dimensions, beside the jmx block it
+# describes, and must match the jmx: entry's process_group under resources:.
 #
 # Consume it explicitly in main.tf — this is a top-level key, not a resources: one:
 #   configs      = try(local.cfg.cwagent_configs, [])
@@ -60,13 +62,11 @@ lambda_concurrency_threshold: 900     # account-level concurrency alarm threshol
 cwagent_configs:
   - name:                    billing-chat-fleet
     cwagent_dimension_value: billing-chat-live   # same value as the asg/jmx entries
-    template:                chat.json.tftpl     # owns logs + jmx
-    process_group:           chat-server-tomcat
+    template:                chat.json.tftpl     # owns logs + jmx + ProcessGroupName
   - name:                    billing-batch-java
     cwagent_dimension_value: billing-batch
     template:                batch.json.tftpl
-    process_group:           batch-runner
-  # no template: host metrics only, so no process_group either
+  # no template: host metrics only — no JVM, no log shipping
   - name:                    billing-bastion
     cwagent_dimension_value: billing-bastion
 

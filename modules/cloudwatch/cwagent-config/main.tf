@@ -46,7 +46,6 @@ locals {
     collection_interval = var.metrics_collection_interval
     dimension_key       = var.cwagent_dimension_key
     dimension_value     = c.cwagent_dimension_value
-    process_group       = c.process_group == null ? "" : c.process_group
   } }
 
   # An entry with no overlay renders templates/empty.json.tftpl rather than a
@@ -79,13 +78,13 @@ locals {
   # IDENTITY STAMP. No template writes the fleet dimension; this does, on every
   # plugin, after the merge. So a plugin an overlay replaces — or invents — is
   # compliant by construction, and cannot become the one series no alarm matches.
-  # Both maps are map(string) so the conditional below has one consistent type.
+  #
+  # This is the ONLY dimension the module owns. Anything else an app wants —
+  # ProcessGroupName on a jmx block, say — is written in the overlay next to the
+  # plugin it describes, and survives this merge untouched (the module map is
+  # last, so it wins only on its own key).
   #----------------------------------------------------------------------------
   dims = { for k, c in local.configs : k => tomap({ (var.cwagent_dimension_key) = c.cwagent_dimension_value }) }
-  jmx_dims = { for k, c in local.configs : k => tomap(merge(
-    { (var.cwagent_dimension_key) = c.cwagent_dimension_value },
-    c.process_group == null ? {} : { ProcessGroupName = c.process_group },
-  )) }
 
   # A plugin value is either an object (mem, disk, …) or a list of them (jmx,
   # procstat). jsonencode is the discriminator — a JSON array starts with "[" —
@@ -93,13 +92,13 @@ locals {
   plugins = { for k, c in local.configs : k => merge(
     {
       for pk, pv in local.plugins_kept[k] : pk => merge(pv, {
-        append_dimensions = merge(try(pv.append_dimensions, {}), pk == "jmx" ? local.jmx_dims[k] : local.dims[k])
+        append_dimensions = merge(try(pv.append_dimensions, {}), local.dims[k])
       }) if substr(jsonencode(pv), 0, 1) != "["
     },
     {
       for pk, pv in local.plugins_kept[k] : pk => [
         for e in pv : merge(e, {
-          append_dimensions = merge(try(e.append_dimensions, {}), pk == "jmx" ? local.jmx_dims[k] : local.dims[k])
+          append_dimensions = merge(try(e.append_dimensions, {}), local.dims[k])
         })
       ] if substr(jsonencode(pv), 0, 1) == "["
     },
@@ -161,11 +160,6 @@ resource "aws_ssm_parameter" "cwagent_config" {
   })
 
   lifecycle {
-    precondition {
-      condition     = !local.has_jmx[each.key] || each.value.process_group != null
-      error_message = "Config '${each.key}' declares a jmx plugin but no process_group. ProcessGroupName is the dimension the JMX alarms and the JVM dashboard filter on; without it their queries match nothing and sit notBreaching — green, not red."
-    }
-
     precondition {
       condition     = var.tier != "Standard" || length(local.config_json[each.key]) <= 4096
       error_message = "Rendered agent config for '${each.key}' exceeds the 4096-byte Standard-tier limit. Set tier = \"Advanced\" (billed per parameter) or trim the overlay."

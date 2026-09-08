@@ -26,18 +26,16 @@ variable "configs" {
     `"<plugin>": null` drops one. Omit `template` entirely for a host group that
     wants host metrics only — no JVM, no log shipping.
 
-    Never write the identity dimensions into an overlay: the module stamps
-    `<cwagent_dimension_key>` on every plugin, and `ProcessGroupName` on `jmx`,
-    after the merge.
-
-    `process_group` is required whenever the overlay declares a jmx plugin (a
-    precondition enforces it) and meaningless otherwise.
+    Never write the fleet dimension into an overlay: the module stamps
+    `<cwagent_dimension_key>` on every plugin after the merge, so it cannot be
+    forgotten on one. Any OTHER dimension an app wants — `ProcessGroupName` on a
+    jmx block, say — belongs in the overlay's own `append_dimensions`, next to
+    the plugin it describes. The module neither writes nor checks those.
   EOT
   type = list(object({
     name                    = string
     cwagent_dimension_value = string
     template                = optional(string)
-    process_group           = optional(string)
   }))
 
   validation {
@@ -53,11 +51,6 @@ variable "configs" {
   validation {
     condition     = alltrue([for c in var.configs : trimspace(c.cwagent_dimension_value) != ""])
     error_message = "configs[*].cwagent_dimension_value must be non-empty: an empty dimension value publishes series no alarm query can match, and every CWAgent-sourced alarm treats missing data as not breaching — permanently green."
-  }
-
-  validation {
-    condition     = alltrue([for c in var.configs : c.process_group == null || trimspace(coalesce(c.process_group, " ")) != ""])
-    error_message = "configs[*].process_group must be non-empty when set: it is the ProcessGroupName dimension on the jmx plugin, which the JMX alarms and the JVM dashboard filter on."
   }
 }
 

@@ -1,5 +1,5 @@
 {
-  "//": "billing chat fleet. The project owns `logs` and `jmx`; the module's base owns the host metrics. Available vars: project, env, name, dimension_value, process_group, collection_interval. Never write AppName/ProcessGroupName here — the module stamps identity on every plugin after the merge.",
+  "//": "billing chat fleet. The project owns `logs` and `jmx`; the module's base owns the host metrics. Available vars: project, env, name, dimension_value, collection_interval. Never write the fleet dimension here — the module stamps it on every plugin after the merge. Any OTHER dimension is this file's job: ProcessGroupName below must match the jmx_resources entry's process_group.",
 
   "logs": {
     "logs_collected": {
@@ -21,6 +21,9 @@
       "jmx": [
         {
           "endpoint": "localhost:9999",
+          "append_dimensions": {
+            "ProcessGroupName": "chat-server-tomcat"
+          },
           "jvm": {
             "measurement": [
               { "name": "jvm.classes.loaded",           "rename": "jvm_classes_loaded" },

@@ -30,31 +30,37 @@ depths — top level, `metrics`, and `metrics_collected` — and stops: a plugin
 overlay names is replaced **whole**, never field-merged. `"<plugin>": null` drops
 one. `"//"` keys are the overlays' comment idiom and never reach the agent.
 
-**No template writes the identity.** The module stamps
-`<cwagent_dimension_key> = <value>` onto every plugin after the merge, and
-`ProcessGroupName` onto `jmx`, so a plugin a project replaces — or invents next
-year — is compliant by construction.
+**No template writes the fleet identity.** The module stamps
+`<cwagent_dimension_key> = <value>` onto every plugin after the merge, so a
+plugin a project replaces — or invents next year — is compliant by construction.
 
-Overlay variables: `project`, `env`, `name`, `dimension_value`, `process_group`,
+That one dimension is all the module owns. Every **other** dimension an app wants
+— `ProcessGroupName` on a `jmx` block is the usual one — is written in the
+overlay's own `append_dimensions`, beside the plugin it describes, and passes
+through the merge untouched: the module's map is merged last, so it wins only on
+its own key. The module does not write those and does not check them. A
+`ProcessGroupName` the JMX alarms filter on is therefore the overlay's
+responsibility, hand-synced with the `jmx_resources` entry's `process_group`
+exactly as the dimension *values* have always been.
+
+Overlay variables: `project`, `env`, `name`, `dimension_value`,
 `collection_interval`. `name` is what lets two host groups share one overlay file
 and still write distinct log group names.
 
-## Two guards, because the JVM contract moved into project files
+## One guard, because the JVM contract moved into project files
 
 The `jmx` block is where the alarms' contract lives, and it is now per project —
-so the module checks what it can:
+so the module checks the one thing it can:
 
-- **`process_group` is required when an overlay declares `jmx`** — a resource
-  precondition, so it blocks the apply. Without it there is no `ProcessGroupName`
-  dimension, and the JMX alarms and dashboard widgets filter on one.
 - **`required_jvm_metrics` must appear among the overlay's renames** — a `check`
   block, so it warns rather than blocks (collecting a subset is legitimate). It
   is a hand-synced mirror of what `metrics-alarm/jmx` queries: Terraform cannot
   read another module's query text. Drop `jvm_memory_heap_used` from an overlay
   and the heap alarm does not error — it goes `notBreaching`. Forever.
 
-Neither guard can see the *values*: nothing checks that an overlay's snake_case
-renames match what the alarms actually query beyond those names, or that
+It cannot see the *values*: nothing checks that an overlay's snake_case renames
+match what the alarms actually query beyond those names, that an overlay declares
+the `ProcessGroupName` its `jmx_resources` entry filters on, or that
 `cwagent_dimension_value` equals the one on the `asg`/`jmx` entry. Those stay
 hand-synced, as they were.
 

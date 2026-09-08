@@ -346,12 +346,11 @@ variable "jmx_dashboard_enabled" {
 # NEXT, so the agents must be restarted before the queries match again.
 #------------------------------------------------------------------------------
 variable "cwagent_configs" {
-  description = "CloudWatch Agent configs to publish, one SSM parameter per host group. `cwagent_dimension_value` must match the asg/jmx entry watching the same fleet. `template` is a file under cwagent/ in this directory carrying this app's `logs` and `jmx` blocks (the module's base has neither) plus any host-metric departure from it; omit it for host metrics only. `process_group` is required when the overlay declares a jmx plugin."
+  description = "CloudWatch Agent configs to publish, one SSM parameter per host group. `cwagent_dimension_value` must match the asg/jmx entry watching the same fleet. `template` is a file under cwagent/ in this directory carrying this app's `logs` and `jmx` blocks (the module's base has neither) plus any host-metric departure from it; omit it for host metrics only. Dimensions other than the fleet one — `ProcessGroupName` in particular — are written in the overlay, not here."
   type = list(object({
     name                    = string
     cwagent_dimension_value = string
     template                = optional(string)
-    process_group           = optional(string)
   }))
   default = []
 }

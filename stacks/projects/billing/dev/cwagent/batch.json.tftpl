@@ -1,11 +1,14 @@
 {
-  "//": "billing batch hosts: a JVM, no log shipping, none of the network plugins.",
+  "//": "billing batch hosts: a JVM, no log shipping, none of the network plugins. ProcessGroupName is this file's to set — the module stamps only the fleet dimension.",
 
   "metrics": {
     "metrics_collected": {
       "jmx": [
         {
           "endpoint": "localhost:9998",
+          "append_dimensions": {
+            "ProcessGroupName": "batch-runner"
+          },
           "jvm": {
             "measurement": [
               { "name": "jvm.gc.collections.count",   "rename": "jvm_gc_collections_count" },
